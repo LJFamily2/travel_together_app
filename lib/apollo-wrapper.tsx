@@ -2,6 +2,7 @@
 
 import React from "react";
 import { ApolloLink, HttpLink } from "@apollo/client";
+import { setContext } from "@apollo/client/link/context";
 import {
   ApolloNextAppProvider,
   NextSSRApolloClient,
@@ -17,6 +18,17 @@ function makeClient() {
         : "/api/graphql",
   });
 
+  const authLink = setContext((_, { headers }) => {
+    const token =
+      typeof window !== "undefined" ? localStorage.getItem("guestToken") : null;
+    return {
+      headers: {
+        ...headers,
+        authorization: token ? `Bearer ${token}` : "",
+      },
+    };
+  });
+
   return new NextSSRApolloClient({
     cache: new NextSSRInMemoryCache(),
     link:
@@ -27,7 +39,7 @@ function makeClient() {
             }),
             httpLink,
           ])
-        : httpLink,
+        : authLink.concat(httpLink),
   });
 }
 

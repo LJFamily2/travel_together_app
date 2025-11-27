@@ -12,6 +12,11 @@ const typeDefs = gql`
     bankInformation: BankDetails
   }
 
+  type AuthPayload {
+    token: String!
+    user: User!
+  }
+
   type User {
     id: ID!
     name: String!
@@ -77,6 +82,7 @@ const typeDefs = gql`
       description: String
       splits: [SplitInput]
     ): Expense
+    joinAsGuest(name: String!, journeyId: ID!): AuthPayload
   }
 
   input SplitInput {
