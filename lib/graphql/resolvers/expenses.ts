@@ -1,6 +1,7 @@
 import mongoose from "mongoose";
 import dbConnect from "../../mongodb";
 import Expense, { IExpense } from "../../models/Expense";
+import { notifyJourneyUpdate } from "../../utils/notifySocket";
 
 interface SplitInput {
   userId: string;
@@ -44,6 +45,10 @@ const expenseResolvers = {
         })),
       });
       await newExpense.save();
+
+      // Notify socket server about the update
+      await notifyJourneyUpdate(journeyId);
+
       return await newExpense.populate("payerId");
     },
     updateExpense: async (
@@ -76,6 +81,11 @@ const expenseResolvers = {
       }
 
       await expense.save();
+
+      // Notify socket server about the update
+      // We need journeyId, which is in the expense document
+      await notifyJourneyUpdate(expense.journeyId.toString());
+
       return await expense.populate("payerId");
     },
   },

@@ -1,5 +1,6 @@
 import { ApolloServer } from "@apollo/server";
 import { startServerAndCreateNextHandler } from "@as-integrations/next";
+import { NextRequest } from "next/server";
 import typeDefs from "../../../lib/graphql/typeDefs";
 import resolvers from "../../../lib/graphql/resolvers/index";
 import dbConnect from "../../../lib/mongodb";
@@ -9,11 +10,17 @@ const server = new ApolloServer({
   resolvers,
 });
 
-const handler = startServerAndCreateNextHandler(server, {
-  context: async (req, res) => {
+const apiHandler = startServerAndCreateNextHandler<NextRequest>(server, {
+  context: async (req) => {
     await dbConnect();
-    return { req, res };
+    return { req };
   },
 });
 
-export { handler as GET, handler as POST };
+export async function GET(request: NextRequest) {
+  return apiHandler(request);
+}
+
+export async function POST(request: NextRequest) {
+  return apiHandler(request);
+}

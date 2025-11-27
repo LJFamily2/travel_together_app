@@ -2,6 +2,7 @@ import mongoose from "mongoose";
 import dbConnect from "../../mongodb";
 import Journey, { IJourney } from "../../models/Journey";
 import Expense from "../../models/Expense";
+import { notifyJourneyUpdate } from "../../utils/notifySocket";
 
 const journeyResolvers = {
   Query: {
@@ -67,6 +68,9 @@ const journeyResolvers = {
       if (!isMember) {
         journey.members.push(new mongoose.Types.ObjectId(userId));
         await journey.save();
+
+        // Notify socket server about the update
+        await notifyJourneyUpdate(journeyId);
       }
       return await journey.populate(["leaderId", "members"]);
     },
