@@ -4,6 +4,7 @@ import { NextRequest } from "next/server";
 import typeDefs from "../../../lib/graphql/typeDefs";
 import resolvers from "../../../lib/graphql/resolvers/index";
 import dbConnect from "../../../lib/mongodb";
+import jwt from "jsonwebtoken";
 
 const server = new ApolloServer({
   typeDefs,
@@ -13,7 +14,17 @@ const server = new ApolloServer({
 const apiHandler = startServerAndCreateNextHandler<NextRequest>(server, {
   context: async (req) => {
     await dbConnect();
-    return { req };
+    const token =
+      req.headers.get("authorization")?.replace("Bearer ", "") || "";
+    let user = null;
+    if (token) {
+      try {
+        user = jwt.verify(token, process.env.JWT_SECRET || "fallback_secret");
+      } catch (e) {
+        console.error("Invalid token");
+      }
+    }
+    return { req, user };
   },
 });
 

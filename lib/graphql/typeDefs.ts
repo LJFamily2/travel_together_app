@@ -53,11 +53,13 @@ const typeDefs = gql`
     description: String!
     splits: [Split]!
     createdAt: String!
+    hasImage: Boolean
   }
 
   type Query {
     getJourneyDetails(journeyId: ID!): Journey
     getUsers: [User]
+    me: User
   }
 
   type Mutation {
@@ -75,14 +77,24 @@ const typeDefs = gql`
       totalAmount: Float!
       description: String!
       splits: [SplitInput]!
+      imageBase64: String
     ): Expense
     updateExpense(
       expenseId: ID!
+      payerId: ID
       totalAmount: Float
       description: String
       splits: [SplitInput]
+      imageBase64: String
     ): Expense
+    deleteExpense(expenseId: ID!): Boolean
     joinAsGuest(name: String!, journeyId: ID!): AuthPayload
+    login(userId: ID!, journeyId: ID!): AuthPayload
+    updateBankInfo(
+      bankName: String
+      accountNumber: String
+      accountName: String
+    ): User
   }
 
   input SplitInput {

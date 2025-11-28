@@ -16,6 +16,7 @@ const mergedResolvers = {
   Expense: expenseResolvers.Expense,
   Split: expenseResolvers.Split,
   BankInfo: userResolvers.BankInfo,
+  User: userResolvers.User,
 };
 
 export default mergedResolvers;
