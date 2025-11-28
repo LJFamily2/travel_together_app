@@ -81,7 +81,7 @@ export default function Home() {
     setIsSubmitting(true);
     try {
       const userRes = await createUser({
-        variables: { name, email: `${name}@example.com` },
+        variables: { name },
       });
       const leaderId = userRes.data?.createUser.id;
       if (!leaderId) throw new Error("Failed to create user");

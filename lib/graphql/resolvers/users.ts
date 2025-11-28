@@ -26,7 +26,10 @@ const userResolvers = {
       { name, email }: { name: string; email?: string }
     ) => {
       await dbConnect();
-      const newUser = new User({ name, email, isGuest: false });
+      const userData: any = { name, isGuest: false };
+      if (email) userData.email = email;
+
+      const newUser = new User(userData);
       await newUser.save();
       return newUser;
     },
