@@ -83,21 +83,17 @@ export default function MyTotalSpend({
   const netBalance = myTotalPayments - myTotalCost;
 
   return (
-    <div className="p-4 border rounded shadow-md bg-blue-50 dark:bg-blue-900 mb-6">
-      <h3 className="text-lg font-bold mb-2">My Financials</h3>
+    <div className="p-6 border border-gray-100 rounded-[34px] shadow-sm bg-white mb-6">
+      <h3 className="text-lg font-bold mb-4">My Financials</h3>
       <div className="grid grid-cols-2 gap-4">
-        <div>
-          <p className="text-sm text-gray-600 dark:text-gray-300">
-            Total Share (Cost)
-          </p>
-          <p className="text-xl font-bold">${myTotalCost.toFixed(2)}</p>
+        <div className="p-4 bg-gray-50 rounded-2xl">
+          <p className="text-sm text-gray-600">Total Share (Cost)</p>
+          <p className="text-2xl font-bold mt-1">${myTotalCost.toFixed(2)}</p>
         </div>
-        <div>
-          <p className="text-sm text-gray-600 dark:text-gray-300">
-            Net Balance
-          </p>
+        <div className="p-4 bg-gray-50 rounded-2xl">
+          <p className="text-sm text-gray-600">Net Balance</p>
           <p
-            className={`text-xl font-bold ${
+            className={`text-2xl font-bold mt-1 ${
               netBalance >= 0 ? "text-green-600" : "text-red-600"
             }`}
           >
@@ -105,7 +101,7 @@ export default function MyTotalSpend({
               ? `+${netBalance.toFixed(2)}`
               : `${netBalance.toFixed(2)}`}
           </p>
-          <p className="text-xs text-gray-500">
+          <p className="text-xs text-gray-500 mt-1">
             {netBalance >= 0 ? "You are owed" : "You owe"}
           </p>
         </div>

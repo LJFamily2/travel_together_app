@@ -4,6 +4,7 @@ import { useState, ChangeEvent } from "react";
 import { gql } from "@apollo/client";
 import { useMutation } from "@apollo/client/react";
 import Image from "next/image";
+import toast from "react-hot-toast";
 
 const ADD_EXPENSE = gql`
   mutation AddExpense(
@@ -97,7 +98,9 @@ export default function AddExpenseForm({
     }
 
     if (splitMembers.length === 0) {
-      alert("Please select at least one person to split the expense with.");
+      toast.error(
+        "Please select at least one person to split the expense with."
+      );
       return;
     }
 
@@ -128,9 +131,10 @@ export default function AddExpenseForm({
       setIsAllSelected(true);
       setSelectedMemberIds([]);
       setPayerId(currentUser.id);
-      alert("Expense added!");
+      toast.success("Expense added!");
     } catch (err) {
       console.error("Error adding expense:", err);
+      toast.error("Failed to add expense.");
     }
   };
 
@@ -141,29 +145,33 @@ export default function AddExpenseForm({
   return (
     <form
       onSubmit={handleSubmit}
-      className="p-4 border rounded shadow-md bg-white dark:bg-gray-800"
+      className="p-6 border border-gray-100 rounded-[34px] shadow-sm bg-white"
     >
       <h3 className="text-lg font-bold mb-4">Add New Expense</h3>
 
       <div className="mb-4">
-        <label className="block text-sm font-medium mb-1">Description</label>
+        <label className="block text-sm font-medium mb-1 text-gray-700">
+          Description
+        </label>
         <input
           type="text"
           value={description}
           onChange={(e) => setDescription(e.target.value)}
-          className="w-full p-2 border rounded dark:bg-gray-700"
+          className="w-full p-3 border border-gray-200 rounded-xl bg-gray-50 focus:bg-white transition-colors"
           placeholder="Dinner, Taxi, etc."
           required
         />
       </div>
 
       <div className="mb-4">
-        <label className="block text-sm font-medium mb-1">Amount</label>
+        <label className="block text-sm font-medium mb-1 text-gray-700">
+          Amount
+        </label>
         <input
           type="number"
           value={amount}
           onChange={(e) => setAmount(e.target.value)}
-          className="w-full p-2 border rounded dark:bg-gray-700"
+          className="w-full p-3 border border-gray-200 rounded-xl bg-gray-50 focus:bg-white transition-colors"
           placeholder="0.00"
           step="0.01"
           required
@@ -171,11 +179,13 @@ export default function AddExpenseForm({
       </div>
 
       <div className="mb-4">
-        <label className="block text-sm font-medium mb-1">Paid By</label>
+        <label className="block text-sm font-medium mb-1 text-gray-700">
+          Paid By
+        </label>
         <select
           value={payerId}
           onChange={(e) => setPayerId(e.target.value)}
-          className="w-full p-2 border rounded dark:bg-gray-700"
+          className="w-full p-3 border border-gray-200 rounded-xl bg-gray-50 focus:bg-white transition-colors"
         >
           {uniqueMembers.map((m) => (
             <option key={m.id} value={m.id}>
@@ -186,7 +196,9 @@ export default function AddExpenseForm({
       </div>
 
       <div className="mb-4">
-        <label className="block text-sm font-medium mb-2">Split With</label>
+        <label className="block text-sm font-medium mb-2 text-gray-700">
+          Split With
+        </label>
 
         {isAllSelected ? (
           <button
@@ -196,12 +208,10 @@ export default function AddExpenseForm({
               // Initialize with all selected so user can deselect
               setSelectedMemberIds(uniqueMembers.map((m) => m.id));
             }}
-            className="flex items-center gap-2 bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-medium hover:bg-blue-200 transition-colors"
+            className="flex items-center gap-2 bg-black text-white px-4 py-2 rounded-full text-sm font-medium hover:opacity-80 transition-opacity"
           >
             All
-            <span className="text-blue-600 hover:text-blue-900 font-bold">
-              ✕
-            </span>
+            <span className="text-gray-300 font-bold">✕</span>
           </button>
         ) : (
           <div className="space-y-3">
@@ -227,7 +237,7 @@ export default function AddExpenseForm({
                 placeholder="Search users..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full p-2 text-sm border rounded dark:bg-gray-700 mb-2"
+                className="w-full p-2 text-sm border border-gray-200 rounded-xl bg-gray-50 mb-2"
               />
             )}
 
@@ -243,8 +253,8 @@ export default function AddExpenseForm({
                       flex items-center justify-center px-3 py-1 rounded-full text-sm border transition-all
                       ${
                         isSelected
-                          ? "bg-blue-600 text-white border-blue-600 shadow-sm"
-                          : "bg-gray-100 text-gray-700 border-gray-200 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:border-gray-600"
+                          ? "bg-black text-white border-black shadow-sm"
+                          : "bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100"
                       }
                     `}
                   >
@@ -258,12 +268,14 @@ export default function AddExpenseForm({
       </div>
 
       <div className="mb-4">
-        <label className="block text-sm font-medium mb-1">Receipt Image</label>
+        <label className="block text-sm font-medium mb-1 text-gray-700">
+          Receipt Image
+        </label>
         <input
           type="file"
           accept="image/*"
           onChange={handleImageChange}
-          className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+          className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-black file:text-white hover:file:opacity-80"
         />
         {imageBase64 && (
           <Image
@@ -271,16 +283,15 @@ export default function AddExpenseForm({
             alt="Preview"
             width={200}
             height={200}
-            className="mt-2 h-20 w-auto object-cover rounded"
+            className="mt-2 h-20 w-auto object-cover rounded-xl"
           />
         )}
       </div>
 
       <button
-        // ...existing code...
         type="submit"
         disabled={loading}
-        className="w-full bg-blue-600 text-white py-2 px-4 rounded hover:bg-blue-700 disabled:opacity-50"
+        className="w-full bg-black text-white py-3 px-4 rounded-full font-medium hover:opacity-80 disabled:opacity-50 transition-opacity"
       >
         {loading ? "Adding..." : "Add Expense"}
       </button>

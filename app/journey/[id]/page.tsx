@@ -5,6 +5,9 @@ import { useQuery, useMutation, useApolloClient } from "@apollo/client/react";
 import { gql } from "@apollo/client";
 import { useParams, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
+import toast from "react-hot-toast";
+import FigmaNavbar from "../../components/FigmaNavbar";
+import FigmaFooter from "../../components/FigmaFooter";
 import AddExpenseForm from "../../components/AddExpenseForm";
 import ActivityFeed from "../../components/ActivityFeed";
 import MyTotalSpend from "../../components/MyTotalSpend";
@@ -210,152 +213,174 @@ export default function JourneyDashboard() {
   if (!currentUser)
     return <div className="p-8">Please join the journey first.</div>;
 
+  const handleLeave = async () => {
+    try {
+      const timezoneOffset = -new Date().getTimezoneOffset();
+      const result = (await leaveJourney({
+        variables: {
+          journeyId,
+          leaderTimezoneOffsetMinutes: timezoneOffset,
+        },
+      })) as {
+        data?: LeaveJourneyResponse;
+      };
+      const updatedJourney = result?.data?.leaveJourney;
+      if (updatedJourney) {
+        try {
+          const existing = client.readQuery<DashboardData>({
+            query: GET_DASHBOARD_DATA,
+            variables: { journeyId },
+          });
+
+          if (existing && existing.getJourneyDetails) {
+            const merged = {
+              ...existing,
+              getJourneyDetails: {
+                ...existing.getJourneyDetails,
+                ...updatedJourney,
+                expenses: existing.getJourneyDetails.expenses,
+                members:
+                  updatedJourney.members || existing.getJourneyDetails.members,
+              },
+            } as DashboardData;
+
+            client.writeQuery({
+              query: GET_DASHBOARD_DATA,
+              variables: { journeyId },
+              data: merged,
+            });
+          } else {
+            try {
+              await refetch();
+            } catch (err) {
+              console.warn("Could not refetch data after leaveJourney:", err);
+            }
+          }
+        } catch (cacheError) {
+          console.warn("Could not write updated journey to cache:", cacheError);
+        }
+      }
+      localStorage.removeItem("guestToken");
+      await client.clearStore();
+      router.push("/");
+    } catch (e) {
+      toast.error("Failed to leave journey: " + (e as Error).message);
+    }
+  };
+
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-black p-4 md:p-8">
-      <header className="mb-8 flex justify-center md:justify-between items-center flex-wrap gap-4">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-            {journey.name}
-          </h1>
-          <p className="text-gray-500">Leader: {journey.leader.name}</p>
-        </div>
-        <div className="flex gap-2">
-          <button
-            onClick={() => setIsSettleModalOpen(true)}
-            className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700"
-          >
-            Settle Up
-          </button>
-          <button
-            onClick={async () => {
-              if (confirm("Are you sure you want to leave this journey?")) {
-                try {
-                  const timezoneOffset = -new Date().getTimezoneOffset();
-                  const result = (await leaveJourney({
-                    variables: {
-                      journeyId,
-                      leaderTimezoneOffsetMinutes: timezoneOffset,
-                    },
-                  })) as {
-                    data?: LeaveJourneyResponse;
-                  };
-                  const updatedJourney = result?.data?.leaveJourney;
-                  if (updatedJourney) {
-                    // Update the cache so any clients that query this journey get the new expireAt
-                    try {
-                      // Read the existing cache result
-                      const existing = client.readQuery<DashboardData>({
-                        query: GET_DASHBOARD_DATA,
-                        variables: { journeyId },
-                      });
+    <div className="min-h-screen bg-(--color-background) text-(--color-foreground) font-sans flex flex-col">
+      <FigmaNavbar />
 
-                      if (existing && existing.getJourneyDetails) {
-                        const merged = {
-                          ...existing,
-                          getJourneyDetails: {
-                            ...existing.getJourneyDetails,
-                            ...updatedJourney,
-                            // Ensure fields that might be missing from the mutation
-                            // result are preserved from the existing cache value.
-                            expenses: existing.getJourneyDetails.expenses,
-                            members:
-                              updatedJourney.members ||
-                              existing.getJourneyDetails.members,
-                          },
-                        } as DashboardData;
-
-                        client.writeQuery({
-                          query: GET_DASHBOARD_DATA,
-                          variables: { journeyId },
-                          data: merged,
-                        });
-                      } else {
-                        // If no existing cache entry, refetch to populate cache
-                        try {
-                          await refetch();
-                        } catch (err) {
-                          console.warn(
-                            "Could not refetch data after leaveJourney:",
-                            err
-                          );
-                        }
-                      }
-                    } catch (cacheError) {
-                      console.warn(
-                        "Could not write updated journey to cache:",
-                        cacheError
-                      );
-                    }
-                  }
-                  localStorage.removeItem("guestToken");
-                  await client.clearStore();
-                  router.push("/");
-                } catch (e) {
-                  alert("Failed to leave journey: " + (e as Error).message);
-                }
-              }
-            }}
-            className="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600"
-          >
-            Leave
-          </button>
-        </div>
-      </header>
-
-      {journey.expireAt && isEndingSoon && (
-        <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6 rounded shadow-sm animate-pulse">
-          <div className="flex items-center">
-            <div className="py-1">
-              <svg
-                className="fill-current h-6 w-6 text-red-500 mr-4"
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 20 20"
-              >
-                <path d="M2.93 17.07A10 10 0 1 1 17.07 2.93 10 10 0 0 1 2.93 17.07zm12.73-1.41A8 8 0 1 0 4.34 4.34a8 8 0 0 0 11.32 11.32zM9 11V9h2v6H9v-4zm0-6h2v2H9V5z" />
-              </svg>
-            </div>
+      <main className="grow w-full max-w-[1440px] mx-auto p-4 md:p-8">
+        <div className="bg-white rounded-[34px] p-6 md:p-10 shadow-sm min-h-[80vh]">
+          <header className="mb-8 flex justify-between items-center flex-wrap gap-4 border-b border-gray-100 pb-6">
             <div>
-              <p className="font-bold">⚠️ Journey Ending Soon</p>
-              <p className="text-sm">
-                The leader has left or the journey is expiring. This room will
-                be deleted on {new Date(journey.expireAt).toLocaleString()}{" "}
-                (your local time).
-                <br />
-                VN time:{" "}
-                {new Intl.DateTimeFormat(undefined, {
-                  timeZone: "Asia/Ho_Chi_Minh",
-                  dateStyle: "full",
-                  timeStyle: "long",
-                }).format(new Date(journey.expireAt))}
-                <br />
-                Please save your data immediately.
-              </p>
+              <h1 className="text-4xl font-bold mb-2 text-gray-900">
+                {journey.name}
+              </h1>
+              <div className="flex items-center gap-2 text-gray-500">
+                <span className="bg-gray-100 px-3 py-1 rounded-full text-sm">
+                  Leader: {journey.leader.name}
+                </span>
+                <span className="bg-gray-100 px-3 py-1 rounded-full text-sm">
+                  ID: {journey.id}
+                </span>
+              </div>
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setIsSettleModalOpen(true)}
+                className="bg-green-600 text-white px-6 py-2.5 rounded-full font-medium hover:bg-green-700 transition-colors shadow-sm"
+              >
+                Settle Up
+              </button>
+              <button
+                onClick={() => {
+                  toast((t) => (
+                    <div className="flex flex-col gap-2">
+                      <span className="font-medium text-sm">
+                        Leave this journey?
+                      </span>
+                      <div className="flex gap-2">
+                        <button
+                          className="bg-red-500 text-white px-3 py-1 rounded-lg text-xs"
+                          onClick={() => {
+                            toast.dismiss(t.id);
+                            handleLeave();
+                          }}
+                        >
+                          Yes
+                        </button>
+                        <button
+                          className="bg-gray-200 px-3 py-1 rounded-lg text-xs"
+                          onClick={() => toast.dismiss(t.id)}
+                        >
+                          No
+                        </button>
+                      </div>
+                    </div>
+                  ));
+                }}
+                className="bg-red-50 text-red-600 px-6 py-2.5 rounded-full font-medium hover:bg-red-100 transition-colors border border-red-100"
+              >
+                Leave Journey
+              </button>
+            </div>
+          </header>
+
+          {journey.expireAt && isEndingSoon && (
+            <div className="bg-red-50 border border-red-100 text-red-700 p-4 mb-8 rounded-2xl flex items-start gap-4">
+              <div className="p-2 bg-red-100 rounded-full">
+                <svg
+                  className="fill-current h-5 w-5 text-red-500"
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 20 20"
+                >
+                  <path d="M2.93 17.07A10 10 0 1 1 17.07 2.93 10 10 0 0 1 2.93 17.07zm12.73-1.41A8 8 0 1 0 4.34 4.34a8 8 0 0 0 11.32 11.32zM9 11V9h2v6H9v-4zm0-6h2v2H9V5z" />
+                </svg>
+              </div>
+              <div>
+                <p className="font-bold text-lg">Journey Ending Soon</p>
+                <p className="text-sm opacity-90 mt-1">
+                  The leader has left or the journey is expiring. This room will
+                  be deleted on {new Date(journey.expireAt).toLocaleString()}{" "}
+                  (your local time).
+                  <br />
+                  Please save your data immediately.
+                </p>
+              </div>
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            {/* Left Column: Stats & Actions */}
+            <div className="lg:col-span-1 space-y-6">
+              <MyTotalSpend
+                journeyId={journeyId}
+                currentUserId={currentUser.id}
+              />
+
+              <AddExpenseForm
+                journeyId={journeyId}
+                currentUser={currentUser}
+                members={journey.members}
+              />
+            </div>
+
+            {/* Right Column: Feed */}
+            <div className="lg:col-span-2">
+              <ActivityFeed
+                expenses={journey.expenses}
+                currentUserId={currentUser.id}
+                members={journey.members}
+              />
             </div>
           </div>
         </div>
-      )}
+      </main>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Left Column: Stats & Actions */}
-        <div className="lg:col-span-1 space-y-6">
-          <MyTotalSpend journeyId={journeyId} currentUserId={currentUser.id} />
-
-          <AddExpenseForm
-            journeyId={journeyId}
-            currentUser={currentUser}
-            members={journey.members}
-          />
-        </div>
-
-        {/* Right Column: Feed */}
-        <div className="lg:col-span-2">
-          <ActivityFeed
-            expenses={journey.expenses}
-            currentUserId={currentUser.id}
-            members={journey.members}
-          />
-        </div>
-      </div>
+      <FigmaFooter />
 
       <SettleUpModal
         journeyId={journeyId}

@@ -4,6 +4,7 @@ import Image from "next/image";
 import { useState, ChangeEvent } from "react";
 import { gql } from "@apollo/client";
 import { useMutation } from "@apollo/client/react";
+import toast from "react-hot-toast";
 
 interface Member {
   id: string;
@@ -176,7 +177,7 @@ export default function ActivityFeed({
 
     const parsedAmount = parseFloat(amount);
     if (isNaN(parsedAmount) || parsedAmount < 0) {
-      alert("Enter a valid non-negative number");
+      toast.error("Enter a valid non-negative number");
       return;
     }
 
@@ -188,7 +189,9 @@ export default function ActivityFeed({
     }
 
     if (splitMembers.length === 0) {
-      alert("Please select at least one person to split the expense with.");
+      toast.error(
+        "Please select at least one person to split the expense with."
+      );
       return;
     }
 
@@ -211,27 +214,51 @@ export default function ActivityFeed({
         },
       });
       closeEdit();
+      toast.success("Expense updated successfully");
     } catch (err) {
       console.error("Failed to update expense:", err);
-      alert("Failed to update expense: " + (err as Error).message);
+      toast.error("Failed to update expense: " + (err as Error).message);
     }
   };
 
-  const handleDelete = async (expenseId: string) => {
-    if (!confirm("Are you sure you want to delete this expense?")) return;
-    try {
-      await deleteExpense({ variables: { expenseId } });
-    } catch (err) {
-      console.error("Failed to delete expense:", err);
-      alert("Failed to delete expense: " + (err as Error).message);
-    }
+  const handleDelete = (expenseId: string) => {
+    toast((t) => (
+      <div className="flex flex-col gap-2">
+        <span className="font-medium text-sm">Delete this expense?</span>
+        <div className="flex gap-2">
+          <button
+            className="bg-red-500 text-white px-3 py-1 rounded-lg text-xs"
+            onClick={async () => {
+              toast.dismiss(t.id);
+              try {
+                await deleteExpense({ variables: { expenseId } });
+                toast.success("Expense deleted successfully");
+              } catch (err) {
+                console.error("Failed to delete expense:", err);
+                toast.error(
+                  "Failed to delete expense: " + (err as Error).message
+                );
+              }
+            }}
+          >
+            Yes
+          </button>
+          <button
+            className="bg-gray-200 px-3 py-1 rounded-lg text-xs"
+            onClick={() => toast.dismiss(t.id)}
+          >
+            No
+          </button>
+        </div>
+      </div>
+    ));
   };
 
   return (
     <div className="mt-6">
       <div className="flex justify-between items-center mb-4">
         <h3 className="text-lg font-bold">Activity Feed</h3>
-        <span className="font-semibold text-gray-700 dark:text-gray-300">
+        <span className="font-semibold text-gray-700">
           Total: ${totalInvolvedAmount.toFixed(2)}
         </span>
       </div>
@@ -250,16 +277,16 @@ export default function ActivityFeed({
           return (
             <div
               key={expense.id}
-              className="p-4 border rounded shadow-sm bg-white dark:bg-gray-800"
+              className="p-6 border border-gray-100 rounded-3xl shadow-sm bg-white"
             >
               <div className="flex justify-between items-start">
                 <div>
-                  <p className="font-semibold">{expense.description}</p>
+                  <p className="font-semibold text-lg">{expense.description}</p>
                   <p className="text-sm text-gray-500">
                     Paid by {expense.payer.name} • $
                     {expense.totalAmount.toFixed(2)}
                   </p>
-                  <p className="text-sm font-medium text-blue-600 dark:text-blue-400 mt-1">
+                  <p className="text-sm font-medium text-black mt-1">
                     Your share: ${myShare.toFixed(2)}
                     {mySplit && mySplit.deduction > 0 && (
                       <span className="text-xs text-gray-500 block">
@@ -282,7 +309,7 @@ export default function ActivityFeed({
                       src={`/api/image/${expense.id}`}
                       alt="Receipt"
                       fill
-                      className="object-cover rounded"
+                      className="object-cover rounded-xl"
                     />
                   </div>
                 )}
@@ -291,13 +318,13 @@ export default function ActivityFeed({
                   <div className="flex flex-col gap-2 ml-2">
                     <button
                       onClick={() => startEdit(expense)}
-                      className="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300 text-sm"
+                      className="px-3 py-1 bg-gray-100 rounded-full hover:bg-gray-200 text-sm transition-colors"
                     >
                       Edit
                     </button>
                     <button
                       onClick={() => handleDelete(expense.id)}
-                      className="px-3 py-1 bg-red-100 text-red-600 rounded hover:bg-red-200 text-sm"
+                      className="px-3 py-1 bg-red-50 text-red-600 rounded-full hover:bg-red-100 text-sm transition-colors"
                       disabled={deleting}
                     >
                       Delete
@@ -315,38 +342,40 @@ export default function ActivityFeed({
 
       {/* Edit Modal */}
       {editingExpense && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-xl w-full max-w-md max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
+          <div className="bg-white p-8 rounded-[34px] shadow-xl w-full max-w-md max-h-[90vh] overflow-y-auto">
             <h2 className="text-xl font-bold mb-4">Edit Expense</h2>
             <form onSubmit={handleSave} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium mb-1">
+                <label className="block text-sm font-medium mb-1 text-gray-700">
                   Description
                 </label>
                 <input
-                  className="w-full p-2 border rounded dark:bg-gray-700"
+                  className="w-full p-3 border border-gray-200 rounded-xl bg-gray-50 focus:bg-white transition-colors"
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                   required
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1">Amount</label>
+                <label className="block text-sm font-medium mb-1 text-gray-700">
+                  Amount
+                </label>
                 <input
                   type="number"
                   step="0.01"
-                  className="w-full p-2 border rounded dark:bg-gray-700"
+                  className="w-full p-3 border border-gray-200 rounded-xl bg-gray-50 focus:bg-white transition-colors"
                   value={amount}
                   onChange={(e) => setAmount(e.target.value)}
                   required
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1">
+                <label className="block text-sm font-medium mb-1 text-gray-700">
                   Paid By
                 </label>
                 <select
-                  className="w-full p-2 border rounded dark:bg-gray-700"
+                  className="w-full p-3 border border-gray-200 rounded-xl bg-gray-50 focus:bg-white transition-colors"
                   value={payerId}
                   onChange={(e) => setPayerId(e.target.value)}
                 >
@@ -360,7 +389,7 @@ export default function ActivityFeed({
 
               {/* Split Logic */}
               <div>
-                <label className="block text-sm font-medium mb-2">
+                <label className="block text-sm font-medium mb-2 text-gray-700">
                   Split With
                 </label>
                 <div className="flex gap-4 mb-2">
@@ -385,11 +414,11 @@ export default function ActivityFeed({
                 </div>
 
                 {!isAllSelected && (
-                  <div className="border p-2 rounded max-h-40 overflow-y-auto">
+                  <div className="border border-gray-200 p-2 rounded-xl max-h-40 overflow-y-auto">
                     <input
                       type="text"
                       placeholder="Search members..."
-                      className="w-full p-1 mb-2 border rounded text-sm dark:bg-gray-700"
+                      className="w-full p-2 mb-2 border border-gray-200 rounded-lg text-sm bg-gray-50"
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
                     />
@@ -413,7 +442,7 @@ export default function ActivityFeed({
               </div>
 
               <div>
-                <label className="block text-sm font-medium mb-1">
+                <label className="block text-sm font-medium mb-1 text-gray-700">
                   Receipt Image (Optional)
                 </label>
                 <input
@@ -428,7 +457,7 @@ export default function ActivityFeed({
                       src={imageBase64}
                       alt="Preview"
                       fill
-                      className="object-cover rounded"
+                      className="object-cover rounded-xl"
                     />
                   </div>
                 )}
@@ -443,14 +472,14 @@ export default function ActivityFeed({
                 <button
                   type="button"
                   onClick={closeEdit}
-                  className="px-4 py-2 bg-gray-300 rounded hover:bg-gray-400"
+                  className="px-4 py-2 bg-gray-100 rounded-full hover:bg-gray-200 transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={updating}
-                  className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+                  className="px-4 py-2 bg-black text-white rounded-full hover:opacity-80 transition-opacity"
                 >
                   {updating ? "Saving..." : "Save Changes"}
                 </button>

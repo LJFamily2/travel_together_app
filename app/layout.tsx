@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { Toaster } from "react-hot-toast";
 import "./globals.css";
 import { ApolloWrapper } from "@/lib/apollo-wrapper";
 import { AuthProvider } from "./auth-provider";
@@ -30,7 +31,10 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
         <AuthProvider>
-          <ApolloWrapper>{children}</ApolloWrapper>
+          <ApolloWrapper>
+            {children}
+            <Toaster position="top-center" />
+          </ApolloWrapper>
         </AuthProvider>
       </body>
     </html>

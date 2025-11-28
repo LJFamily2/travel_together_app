@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { gql } from "@apollo/client";
 import { useMutation } from "@apollo/client/react";
+import toast from "react-hot-toast";
 
 const ADD_EXPENSE = gql`
   mutation AddExpense(
@@ -203,11 +204,11 @@ export default function SettleUpModal({
           accountName,
         },
       });
-      alert("Bank info updated!");
+      toast.success("Bank info updated!");
       setShowBankInfo(false);
     } catch (err) {
       console.error("Error updating bank info:", err);
-      alert("Failed to update bank info");
+      toast.error("Failed to update bank info");
     }
   };
 
@@ -219,7 +220,7 @@ export default function SettleUpModal({
 
     const deductionAmount = parseFloat(deduction);
     if (isNaN(deductionAmount) || deductionAmount <= 0) {
-      alert("Please enter a valid deduction amount.");
+      toast.error("Please enter a valid deduction amount.");
       return;
     }
 
@@ -256,7 +257,7 @@ export default function SettleUpModal({
           ],
         },
       });
-      alert("Deduction recorded!");
+      toast.success("Deduction recorded!");
       onClose();
       // Reset form
       setRecipientId("");
@@ -264,13 +265,13 @@ export default function SettleUpModal({
       setReason("");
     } catch (err) {
       console.error("Error recording deduction:", err);
-      alert("Failed to record deduction.");
+      toast.error("Failed to record deduction.");
     }
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white dark:bg-gray-800 p-6 rounded shadow-lg w-96 max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 backdrop-blur-sm">
+      <div className="bg-white p-8 rounded-[34px] shadow-xl w-96 max-h-[90vh] overflow-y-auto">
         <div className="flex justify-between items-center mb-4">
           <h3 className="text-lg font-bold">Settle Up</h3>
           <button
@@ -282,7 +283,7 @@ export default function SettleUpModal({
         </div>
 
         {showBankInfo && (
-          <div className="mb-6 p-4 bg-blue-50 dark:bg-blue-900 rounded border border-blue-200">
+          <div className="mb-6 p-4 bg-blue-50 rounded-2xl border border-blue-100">
             <h4 className="font-semibold mb-2 text-sm">My Bank Details</h4>
             <div className="space-y-2">
               <input
@@ -290,26 +291,26 @@ export default function SettleUpModal({
                 placeholder="Bank Name"
                 value={bankName}
                 onChange={(e) => setBankName(e.target.value)}
-                className="w-full p-2 text-sm border rounded dark:bg-gray-700"
+                className="w-full p-2 text-sm border border-gray-200 rounded-lg"
               />
               <input
                 type="text"
                 placeholder="Account Number"
                 value={accountNumber}
                 onChange={(e) => setAccountNumber(e.target.value)}
-                className="w-full p-2 text-sm border rounded dark:bg-gray-700"
+                className="w-full p-2 text-sm border border-gray-200 rounded-lg"
               />
               <input
                 type="text"
                 placeholder="Account Name"
                 value={accountName}
                 onChange={(e) => setAccountName(e.target.value)}
-                className="w-full p-2 text-sm border rounded dark:bg-gray-700"
+                className="w-full p-2 text-sm border border-gray-200 rounded-lg"
               />
               <button
                 onClick={handleUpdateBankInfo}
                 disabled={updatingBank}
-                className="w-full py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700"
+                className="w-full py-1 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700"
               >
                 {updatingBank ? "Saving..." : "Save Bank Info"}
               </button>
@@ -318,9 +319,7 @@ export default function SettleUpModal({
         )}
 
         <div className="mb-6">
-          <h4 className="font-semibold mb-2 text-sm text-gray-600 dark:text-gray-300">
-            Balances
-          </h4>
+          <h4 className="font-semibold mb-2 text-sm text-gray-600">Balances</h4>
           <div className="space-y-2">
             {members
               .filter((m) => m.id !== currentUser.id)
@@ -335,10 +334,10 @@ export default function SettleUpModal({
                 return (
                   <div
                     key={member.id}
-                    className="bg-gray-50 dark:bg-gray-700 rounded overflow-hidden"
+                    className="bg-gray-50 rounded-xl overflow-hidden"
                   >
                     <div
-                      className="flex justify-between items-center text-sm p-2 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600"
+                      className="flex justify-between items-center text-sm p-3 cursor-pointer hover:bg-gray-100 transition-colors"
                       onClick={() =>
                         setExpandedUserId(isExpanded ? null : member.id)
                       }
@@ -348,7 +347,11 @@ export default function SettleUpModal({
                         <span>{member.name}</span>
                       </div>
                       <span
-                        className={isOwed ? "text-green-600" : "text-red-600"}
+                        className={
+                          isOwed
+                            ? "text-green-600 font-medium"
+                            : "text-red-600 font-medium"
+                        }
                       >
                         {isOwed ? "owes you" : "you owe"} $
                         {Math.abs(balance).toFixed(2)}
@@ -356,14 +359,14 @@ export default function SettleUpModal({
                     </div>
 
                     {isExpanded && deductions.length > 0 && (
-                      <div className="p-2 bg-gray-100 dark:bg-gray-800 text-xs border-t dark:border-gray-600">
+                      <div className="p-3 bg-gray-100 text-xs border-t border-gray-200">
                         <p className="font-semibold mb-1 text-gray-500">
                           Deduction History:
                         </p>
                         {deductions.map((d, idx) => (
                           <div
                             key={idx}
-                            className="flex justify-between py-1 border-b border-gray-200 dark:border-gray-700 last:border-0"
+                            className="flex justify-between py-1 border-b border-gray-200 last:border-0"
                           >
                             <span>{d.reason}</span>
                             <span className="font-mono">
@@ -374,7 +377,7 @@ export default function SettleUpModal({
                       </div>
                     )}
                     {isExpanded && deductions.length === 0 && (
-                      <div className="p-2 bg-gray-100 dark:bg-gray-800 text-xs text-gray-500 italic">
+                      <div className="p-3 bg-gray-100 text-xs text-gray-500 italic">
                         No deductions recorded.
                       </div>
                     )}
@@ -392,13 +395,13 @@ export default function SettleUpModal({
         </div>
 
         <div className="mb-4">
-          <label className="block text-sm font-medium mb-1">
+          <label className="block text-sm font-medium mb-1 text-gray-700">
             Member (who owes you)
           </label>
           <select
             value={recipientId}
             onChange={(e) => setRecipientId(e.target.value)}
-            className="w-full p-2 border rounded dark:bg-gray-700"
+            className="w-full p-2 border border-gray-200 rounded-lg bg-white"
           >
             <option value="">Select a member</option>
             {members
@@ -419,46 +422,46 @@ export default function SettleUpModal({
         </div>
 
         <div className="mb-4">
-          <label className="block text-sm font-medium mb-1">
+          <label className="block text-sm font-medium mb-1 text-gray-700">
             Amount to Deduct
           </label>
           <input
             type="number"
             value={deduction}
             onChange={(e) => setDeduction(e.target.value)}
-            className="w-full p-2 border rounded dark:bg-gray-700"
+            className="w-full p-2 border border-gray-200 rounded-lg"
             placeholder="0.00"
           />
         </div>
 
         <div className="mb-4">
-          <label className="block text-sm font-medium mb-1">
+          <label className="block text-sm font-medium mb-1 text-gray-700">
             Reason for Deduction
           </label>
           <input
             type="text"
             value={reason}
             onChange={(e) => setReason(e.target.value)}
-            className="w-full p-2 border rounded dark:bg-gray-700"
+            className="w-full p-2 border border-gray-200 rounded-lg"
             placeholder="e.g. Lunch yesterday"
           />
         </div>
 
         {recipientId && (
-          <div className="mb-4 p-2 bg-gray-100 dark:bg-gray-700 rounded text-sm">
-            <p className="font-semibold">Bank Details:</p>
+          <div className="mb-4 p-3 bg-gray-50 rounded-xl text-sm border border-gray-100">
+            <p className="font-semibold mb-1">Bank Details:</p>
             {members.find((m) => m.id === recipientId)?.bankInfo
               ?.bankInformation ? (
               <>
                 <p>
-                  Bank:{" "}
+                  <span className="text-gray-500">Bank:</span>{" "}
                   {
                     members.find((m) => m.id === recipientId)?.bankInfo
                       ?.bankInformation?.name
                   }
                 </p>
                 <p>
-                  Account:{" "}
+                  <span className="text-gray-500">Account:</span>{" "}
                   {
                     members.find((m) => m.id === recipientId)?.bankInfo
                       ?.bankInformation?.number
@@ -471,17 +474,17 @@ export default function SettleUpModal({
           </div>
         )}
 
-        <div className="flex justify-end gap-2">
+        <div className="flex justify-end gap-2 mt-6">
           <button
             onClick={onClose}
-            className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded"
+            className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-full transition-colors"
           >
             Cancel
           </button>
           <button
             onClick={handleSettle}
             disabled={loading}
-            className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
+            className="px-4 py-2 bg-green-600 text-white rounded-full hover:bg-green-700 transition-colors"
           >
             {loading ? "Processing..." : "Record Deduction"}
           </button>
