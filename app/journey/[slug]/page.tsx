@@ -6,6 +6,7 @@ import { gql } from "@apollo/client";
 import { useParams, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import toast from "react-hot-toast";
+import { QRCodeSVG } from "qrcode.react";
 import FigmaNavbar from "../../components/FigmaNavbar";
 import FigmaFooter from "../../components/FigmaFooter";
 import AddExpenseForm from "../../components/AddExpenseForm";
@@ -14,10 +15,17 @@ import MyTotalSpend from "../../components/MyTotalSpend";
 import SettleUpModal from "../../components/SettleUpModal";
 import { useSocket } from "../../../lib/hooks/useSocket";
 
+const GENERATE_JOIN_TOKEN = gql`
+  mutation GenerateJoinToken($journeyId: ID!) {
+    generateJoinToken(journeyId: $journeyId)
+  }
+`;
+
 const GET_DASHBOARD_DATA = gql`
-  query GetDashboardData($journeyId: ID!) {
-    getJourneyDetails(journeyId: $journeyId) {
+  query GetDashboardData($slug: String!) {
+    getJourneyDetails(slug: $slug) {
       id
+      slug
       name
       expireAt
       leader {
@@ -92,6 +100,7 @@ interface Expense {
 interface DashboardData {
   getJourneyDetails: {
     id: string;
+    slug: string;
     name: string;
     expireAt?: string;
     leader: {
@@ -172,17 +181,24 @@ export default function JourneyDashboard() {
   const client = useApolloClient();
   const params = useParams();
   const router = useRouter();
-  const journeyId = params.id as string;
+  const { status } = useSession();
+  const slug = params.slug as string;
   const [isSettleModalOpen, setIsSettleModalOpen] = useState(false);
   const [isEndingSoon, setIsEndingSoon] = useState(false);
   const [isLeaving, setIsLeaving] = useState(false);
+  const [showQr, setShowQr] = useState(false);
+  const [joinToken, setJoinToken] = useState("");
 
   const { data, loading, error, refetch } = useQuery<DashboardData>(
     GET_DASHBOARD_DATA,
     {
-      variables: { journeyId },
+      variables: { slug },
       fetchPolicy: "network-only",
     }
+  );
+
+  const [generateToken] = useMutation<{ generateJoinToken: string }>(
+    GENERATE_JOIN_TOKEN
   );
 
   const [leaveJourney] = useMutation<
@@ -190,13 +206,12 @@ export default function JourneyDashboard() {
     { journeyId: string; leaderTimezoneOffsetMinutes?: number }
   >(LEAVE_JOURNEY);
 
+  const journey = data?.getJourneyDetails;
+  const journeyId = journey?.id;
+
   useSocket(journeyId, () => {
     refetch();
   });
-
-  const { status } = useSession();
-
-  const journey = data?.getJourneyDetails;
   const currentUser = data?.me;
 
   useEffect(() => {
@@ -229,8 +244,19 @@ export default function JourneyDashboard() {
   if (!currentUser)
     return <div className="p-8">Please join the journey first.</div>;
 
+  const handleShowQr = async () => {
+    if (!journeyId) return;
+    try {
+      const { data } = await generateToken({ variables: { journeyId } });
+      setJoinToken(data.generateJoinToken);
+      setShowQr(true);
+    } catch (e) {
+      toast.error("Failed to generate QR code");
+    }
+  };
+
   const handleLeave = async () => {
-    if (isLeaving) return;
+    if (isLeaving || !journeyId) return;
     setIsLeaving(true);
     try {
       const timezoneOffset = -new Date().getTimezoneOffset();
@@ -247,7 +273,7 @@ export default function JourneyDashboard() {
         try {
           const existing = client.readQuery<DashboardData>({
             query: GET_DASHBOARD_DATA,
-            variables: { journeyId },
+            variables: { slug },
           });
 
           if (existing && existing.getJourneyDetails) {
@@ -264,7 +290,7 @@ export default function JourneyDashboard() {
 
             client.writeQuery({
               query: GET_DASHBOARD_DATA,
-              variables: { journeyId },
+              variables: { slug },
               data: merged,
             });
           } else {
@@ -302,9 +328,12 @@ export default function JourneyDashboard() {
                 <span className="bg-gray-100 px-3 py-1 rounded-full text-sm">
                   Leader: {journey.leader.name}
                 </span>
-                <span className="bg-gray-100 px-3 py-1 rounded-full text-sm">
-                  ID: {journey.id}
-                </span>
+                <button
+                  onClick={handleShowQr}
+                  className="bg-blue-100 text-blue-600 px-3 py-1 rounded-full text-sm hover:bg-blue-200 transition-colors"
+                >
+                  Share QR
+                </button>
               </div>
             </div>
             <div className="flex gap-3">
@@ -378,12 +407,12 @@ export default function JourneyDashboard() {
             {/* Left Column: Stats & Actions */}
             <div className="lg:col-span-1 space-y-6">
               <MyTotalSpend
-                journeyId={journeyId}
+                expenses={journey.expenses}
                 currentUserId={currentUser.id}
               />
 
               <AddExpenseForm
-                journeyId={journeyId}
+                journeyId={journey.id}
                 currentUser={currentUser}
                 members={journey.members}
               />
@@ -404,13 +433,50 @@ export default function JourneyDashboard() {
       <FigmaFooter />
 
       <SettleUpModal
-        journeyId={journeyId}
+        journeyId={journey.id}
         currentUser={currentUser}
         members={journey.members}
         expenses={journey.expenses}
         isOpen={isSettleModalOpen}
         onClose={() => setIsSettleModalOpen(false)}
       />
+
+      {showQr && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl p-8 max-w-sm w-full text-center relative">
+            <button
+              onClick={() => setShowQr(false)}
+              className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"
+            >
+              <svg
+                className="w-6 h-6"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M6 18L18 6M6 6l12 12"
+                />
+              </svg>
+            </button>
+            <h3 className="text-xl font-bold mb-4">Join Journey</h3>
+            <div className="flex justify-center mb-4">
+              <QRCodeSVG
+                value={`${
+                  typeof window !== "undefined" ? window.location.origin : ""
+                }/join?token=${joinToken}`}
+                size={200}
+              />
+            </div>
+            <p className="text-sm text-gray-500 mb-4">
+              Scan this QR code to join. Valid for 5 minutes.
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

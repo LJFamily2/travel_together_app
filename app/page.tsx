@@ -22,6 +22,7 @@ const CREATE_JOURNEY = gql`
       endDate: $endDate
     ) {
       id
+      slug
     }
   }
 `;
@@ -51,6 +52,7 @@ interface CreateUserData {
 interface CreateJourneyData {
   createJourney: {
     id: string;
+    slug: string;
   };
 }
 
@@ -90,6 +92,7 @@ export default function Home() {
         variables: { leaderId, name: journeyName, startDate, endDate },
       });
       const newJId = journeyRes.data?.createJourney.id;
+      const newSlug = journeyRes.data?.createJourney.slug;
       if (!newJId) throw new Error("Failed to create journey");
 
       // Auto-login the creator
@@ -99,8 +102,8 @@ export default function Home() {
 
       if (loginRes.data) {
         localStorage.setItem("guestToken", loginRes.data.login.token);
-        toast.success(`Journey Created! ID: ${newJId}. Redirecting...`);
-        router.push(`/journey/${newJId}`);
+        toast.success(`Journey Created! Redirecting...`);
+        router.push(`/journey/${newSlug}`);
       }
     } catch (e) {
       toast.error("Error creating journey: " + (e as Error).message);

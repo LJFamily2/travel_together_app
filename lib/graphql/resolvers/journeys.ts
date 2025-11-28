@@ -1,4 +1,7 @@
 import mongoose from "mongoose";
+import jwt from "jsonwebtoken";
+import slugify from "slugify";
+import { nanoid } from "nanoid";
 import dbConnect from "../../mongodb";
 import Journey, { IJourney } from "../../models/Journey";
 import Expense from "../../models/Expense";
@@ -8,14 +11,11 @@ import { refreshJourneyExpiration } from "../../utils/expiration";
 
 const journeyResolvers = {
   Query: {
-    getJourneyDetails: async (
-      _: unknown,
-      { journeyId }: { journeyId: string }
-    ) => {
+    getJourneyDetails: async (_: unknown, { slug }: { slug: string }) => {
       await dbConnect();
       // TODO: Implement privacy logic here (filter out Total Spend for others)
       // For now, just returning the journey with populated fields
-      const journey = await Journey.findById(journeyId)
+      const journey = await Journey.findOne({ slug })
         .populate("leaderId")
         .populate("members");
       if (!journey) throw new Error("Journey not found");
@@ -67,26 +67,26 @@ const journeyResolvers = {
       }
     ) => {
       await dbConnect();
+
+      const slug = `${slugify(name, { lower: true, strict: true })}-${nanoid(
+        6
+      )}`;
+      const baseDate = endDate ? new Date(endDate) : new Date();
+      const expireAt = new Date(baseDate.getTime() + 5 * 24 * 60 * 60 * 1000);
+
       const newJourney = new Journey({
         leaderId,
         name,
+        slug,
         startDate,
         endDate,
-        members: [leaderId], // Leader is automatically a member
+        members: [leaderId],
         status: "active",
+        expireAt,
       });
 
-      // If endDate is provided, set expireAt to 5 days after endDate
-      if (endDate) {
-        const end = new Date(endDate);
-        const expireAt = new Date(end.getTime() + 5 * 24 * 60 * 60 * 1000); // 5 days later
-        newJourney.expireAt = expireAt;
-      } else {
-        // If no endDate, set initial expiration to 5 days from now (Inactivity Rule)
-        newJourney.expireAt = new Date(Date.now() + 5 * 24 * 60 * 60 * 1000);
-      }
-
       await newJourney.save();
+
       return await newJourney.populate(["leaderId", "members"]);
     },
     joinJourney: async (
@@ -94,7 +94,13 @@ const journeyResolvers = {
       { journeyId, userId }: { journeyId: string; userId: string }
     ) => {
       await dbConnect();
-      const journey = await Journey.findById(journeyId);
+      let journey;
+      if (mongoose.Types.ObjectId.isValid(journeyId)) {
+        journey = await Journey.findById(journeyId);
+      }
+      if (!journey) {
+        journey = await Journey.findOne({ slug: journeyId });
+      }
       if (!journey) throw new Error("Journey not found");
 
       const isMember = journey.members.some(
@@ -231,6 +237,88 @@ const journeyResolvers = {
             : null,
         };
       }
+    },
+    generateJoinToken: async (
+      _: unknown,
+      { journeyId }: { journeyId: string }
+    ) => {
+      await dbConnect();
+      const journey = await Journey.findById(journeyId);
+      if (!journey) throw new Error("Journey not found");
+
+      const token = jwt.sign(
+        { journeyId, type: "join_token" },
+        process.env.NEXTAUTH_SECRET!,
+        { expiresIn: "5m" }
+      );
+      return token;
+    },
+    joinJourneyViaToken: async (
+      _: unknown,
+      { token, name }: { token: string; name?: string },
+      context: { user?: { userId?: string } }
+    ) => {
+      await dbConnect();
+
+      let decoded: { journeyId: string; type: string };
+      try {
+        decoded = jwt.verify(token, process.env.NEXTAUTH_SECRET!) as {
+          journeyId: string;
+          type: string;
+        };
+      } catch {
+        throw new Error("Invalid or expired token");
+      }
+
+      if (!decoded.journeyId || decoded.type !== "join_token") {
+        throw new Error("Invalid token type");
+      }
+
+      const journeyId = decoded.journeyId;
+      const journey = await Journey.findById(journeyId);
+      if (!journey) throw new Error("Journey not found");
+
+      let userId = context?.user?.userId;
+      let user;
+
+      if (userId) {
+        user = await User.findById(userId);
+        if (!user) throw new Error("User not found");
+      } else {
+        if (!name) throw new Error("Name is required for guest access");
+
+        user = new User({
+          name,
+          isGuest: true,
+        });
+        await user.save();
+        userId = user._id.toString();
+      }
+
+      const isMember = journey.members.some(
+        (memberId) => memberId.toString() === userId
+      );
+
+      if (!isMember) {
+        journey.members.push(new mongoose.Types.ObjectId(userId!));
+        await journey.save();
+        await notifyJourneyUpdate(journeyId);
+      }
+
+      const authToken = jwt.sign(
+        { userId: user._id, email: user.email },
+        process.env.NEXTAUTH_SECRET!,
+        { expiresIn: "30d" }
+      );
+
+      return {
+        token: authToken,
+        user: {
+          ...user.toObject(),
+          id: user._id,
+        },
+        journeySlug: journey.slug,
+      };
     },
   },
   Journey: {

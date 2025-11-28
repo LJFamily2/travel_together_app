@@ -13,6 +13,7 @@ const GET_USER_JOURNEYS = gql`
   query GetUserJourneys {
     getUserJourneys {
       id
+      slug
       name
       leader {
         id
@@ -28,13 +29,14 @@ const GET_USER_JOURNEYS = gql`
 
 interface JourneyShort {
   id: string;
+  slug: string;
   name: string;
   leader: { id: string; name: string };
   members: { id: string; name: string }[];
 }
 
 interface JoinJourneyData {
-  joinJourney: { id: string };
+  joinJourney: { id: string; slug: string };
 }
 
 interface JoinJourneyVars {
@@ -59,6 +61,7 @@ export default function DashboardPage() {
     mutation JoinJourney($journeyId: ID!, $userId: ID!) {
       joinJourney(journeyId: $journeyId, userId: $userId) {
         id
+        slug
       }
     }
   `;
@@ -154,7 +157,7 @@ export default function DashboardPage() {
                         userId,
                       },
                     });
-                    const jid = res?.data?.joinJourney?.id ?? joinJourneyId;
+                    const slug = res?.data?.joinJourney?.slug;
                     if (
                       session?.user &&
                       (session.user as unknown as Record<string, string>).appJwt
@@ -165,7 +168,11 @@ export default function DashboardPage() {
                           .appJwt
                       );
                     }
-                    router.push(`/journey/${jid}`);
+                    if (slug) {
+                      router.push(`/journey/${slug}`);
+                    } else {
+                      toast.error("Failed to join journey");
+                    }
                   } catch (e) {
                     toast.error(
                       "Failed to join journey: " + (e as Error).message
@@ -196,7 +203,7 @@ export default function DashboardPage() {
                       disabled={navigatingJourneyId === j.id}
                       onClick={() => {
                         setNavigatingJourneyId(j.id);
-                        router.push(`/journey/${j.id}`);
+                        router.push(`/journey/${j.slug}`);
                       }}
                       className="w-full text-left p-4 rounded-2xl bg-gray-50 hover:bg-blue-50 border border-transparent hover:border-blue-100 transition-all group disabled:opacity-50 disabled:cursor-not-allowed"
                     >

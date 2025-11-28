@@ -2,6 +2,7 @@ import mongoose, { Schema, Document, Model } from "mongoose";
 
 export interface IJourney extends Document {
   name: string;
+  slug: string;
   startDate?: Date;
   endDate?: Date;
   leaderId: mongoose.Types.ObjectId;
@@ -14,6 +15,7 @@ export interface IJourney extends Document {
 const JourneySchema: Schema = new Schema(
   {
     name: { type: String, required: true },
+    slug: { type: String, unique: true, required: true },
     startDate: { type: Date },
     endDate: { type: Date },
     leaderId: { type: Schema.Types.ObjectId, ref: "User", required: true },
@@ -26,6 +28,11 @@ const JourneySchema: Schema = new Schema(
 
 // TTL Index: Documents will be automatically deleted when the current time matches 'expireAt'
 JourneySchema.index({ expireAt: 1 }, { expireAfterSeconds: 0 });
+
+// Delete the model from cache if it exists (for dev hot-reload)
+if (process.env.NODE_ENV !== "production" && mongoose.models.Journey) {
+  delete mongoose.models.Journey;
+}
 
 const Journey: Model<IJourney> =
   mongoose.models.Journey || mongoose.model<IJourney>("Journey", JourneySchema);

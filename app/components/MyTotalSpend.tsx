@@ -1,30 +1,5 @@
 "use client";
 
-import { gql } from "@apollo/client";
-import { useQuery } from "@apollo/client/react";
-
-const GET_MY_SPEND = gql`
-  query GetMySpend($journeyId: ID!) {
-    getJourneyDetails(journeyId: $journeyId) {
-      id
-      expenses {
-        id
-        totalAmount
-        payer {
-          id
-        }
-        splits {
-          user {
-            id
-          }
-          baseAmount
-          deduction
-        }
-      }
-    }
-  }
-`;
-
 interface Split {
   user: {
     id: string;
@@ -42,30 +17,15 @@ interface Expense {
   splits: Split[];
 }
 
-interface JourneyData {
-  getJourneyDetails: {
-    expenses: Expense[];
-  };
-}
-
 interface MyTotalSpendProps {
-  journeyId: string;
+  expenses: Expense[];
   currentUserId: string;
 }
 
 export default function MyTotalSpend({
-  journeyId,
+  expenses,
   currentUserId,
 }: MyTotalSpendProps) {
-  const { data, loading, error } = useQuery<JourneyData>(GET_MY_SPEND, {
-    variables: { journeyId },
-  });
-
-  if (loading) return <p>Loading spend...</p>;
-  if (error) return <p>Error loading spend.</p>;
-
-  const expenses = data?.getJourneyDetails?.expenses || [];
-
   let myTotalCost = 0;
   let myTotalPayments = 0;
 

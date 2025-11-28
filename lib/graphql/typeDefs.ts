@@ -15,6 +15,7 @@ const typeDefs = gql`
   type AuthPayload {
     token: String!
     user: User!
+    journeySlug: String
   }
 
   type User {
@@ -28,6 +29,7 @@ const typeDefs = gql`
 
   type Journey {
     id: ID!
+    slug: String!
     name: String!
     startDate: String
     endDate: String
@@ -58,7 +60,7 @@ const typeDefs = gql`
   }
 
   type Query {
-    getJourneyDetails(journeyId: ID!): Journey
+    getJourneyDetails(slug: String!): Journey
     getUserJourneys: [Journey]
     getUsers: [User]
     me: User
@@ -98,6 +100,8 @@ const typeDefs = gql`
       accountName: String
     ): User
     leaveJourney(journeyId: ID!, leaderTimezoneOffsetMinutes: Int): Journey
+    generateJoinToken(journeyId: ID!): String
+    joinJourneyViaToken(token: String!, name: String): AuthPayload
   }
 
   input SplitInput {
