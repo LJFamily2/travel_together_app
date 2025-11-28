@@ -47,6 +47,10 @@ export default function DashboardPage() {
   const { data: session } = useSession();
   const [joinJourneyId, setJoinJourneyId] = useState("");
   const [hasToken, setHasToken] = useState(false);
+  const [isSigningOut, setIsSigningOut] = useState(false);
+  const [navigatingJourneyId, setNavigatingJourneyId] = useState<string | null>(
+    null
+  );
   const { data, loading, error } = useQuery<{
     getUserJourneys: JourneyShort[];
   }>(GET_USER_JOURNEYS, { skip: !hasToken });
@@ -108,7 +112,10 @@ export default function DashboardPage() {
           <div className="flex justify-between items-center mb-8">
             <h1 className="text-3xl font-bold">Your Dashboard</h1>
             <button
+              disabled={isSigningOut}
               onClick={() => {
+                if (isSigningOut) return;
+                setIsSigningOut(true);
                 try {
                   localStorage.removeItem("guestToken");
                 } catch {
@@ -116,9 +123,9 @@ export default function DashboardPage() {
                 }
                 signOut({ callbackUrl: "/" });
               }}
-              className="text-red-500 hover:text-red-700 text-sm font-medium"
+              className="text-red-500 hover:text-red-700 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Sign Out
+              {isSigningOut ? "Signing Out..." : "Sign Out"}
             </button>
           </div>
 
@@ -165,7 +172,8 @@ export default function DashboardPage() {
                     );
                   }
                 }}
-                className="bg-black text-white px-6 py-3 rounded-xl font-medium hover:bg-gray-800 transition-colors"
+                disabled={joining}
+                className="bg-black text-white px-6 py-3 rounded-xl font-medium hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {joining ? "Joining..." : "Join"}
               </button>
@@ -185,12 +193,17 @@ export default function DashboardPage() {
                 {journeys.map((j: JourneyShort) => (
                   <li key={j.id}>
                     <button
-                      onClick={() => router.push(`/journey/${j.id}`)}
-                      className="w-full text-left p-4 rounded-2xl bg-gray-50 hover:bg-blue-50 border border-transparent hover:border-blue-100 transition-all group"
+                      disabled={navigatingJourneyId === j.id}
+                      onClick={() => {
+                        setNavigatingJourneyId(j.id);
+                        router.push(`/journey/${j.id}`);
+                      }}
+                      className="w-full text-left p-4 rounded-2xl bg-gray-50 hover:bg-blue-50 border border-transparent hover:border-blue-100 transition-all group disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <div className="flex justify-between items-center">
                         <span className="font-semibold text-lg group-hover:text-blue-700 transition-colors">
-                          {j.name}
+                          {j.name}{" "}
+                          {navigatingJourneyId === j.id && "(Loading...)"}
                         </span>
                         <span className="text-gray-400 text-sm group-hover:text-blue-400">
                           View &rarr;

@@ -128,7 +128,16 @@ interface LeaveJourneyResponse {
     name: string;
     expireAt?: string | null;
     leader: { id: string; name: string };
-    members: { id: string; name: string }[];
+    members: {
+      id: string;
+      name: string;
+      bankInfo?: {
+        bankInformation?: {
+          name: string;
+          number: string;
+        };
+      };
+    }[];
   };
 }
 
@@ -148,6 +157,12 @@ const LEAVE_JOURNEY = gql`
       members {
         id
         name
+        bankInfo {
+          bankInformation {
+            name
+            number
+          }
+        }
       }
     }
   }
@@ -160,6 +175,7 @@ export default function JourneyDashboard() {
   const journeyId = params.id as string;
   const [isSettleModalOpen, setIsSettleModalOpen] = useState(false);
   const [isEndingSoon, setIsEndingSoon] = useState(false);
+  const [isLeaving, setIsLeaving] = useState(false);
 
   const { data, loading, error, refetch } = useQuery<DashboardData>(
     GET_DASHBOARD_DATA,
@@ -214,6 +230,8 @@ export default function JourneyDashboard() {
     return <div className="p-8">Please join the journey first.</div>;
 
   const handleLeave = async () => {
+    if (isLeaving) return;
+    setIsLeaving(true);
     try {
       const timezoneOffset = -new Date().getTimezoneOffset();
       const result = (await leaveJourney({
@@ -265,6 +283,7 @@ export default function JourneyDashboard() {
       router.push("/");
     } catch (e) {
       toast.error("Failed to leave journey: " + (e as Error).message);
+      setIsLeaving(false);
     }
   };
 
@@ -296,7 +315,9 @@ export default function JourneyDashboard() {
                 Settle Up
               </button>
               <button
+                disabled={isLeaving}
                 onClick={() => {
+                  if (isLeaving) return;
                   toast((t) => (
                     <div className="flex flex-col gap-2">
                       <span className="font-medium text-sm">
@@ -322,9 +343,9 @@ export default function JourneyDashboard() {
                     </div>
                   ));
                 }}
-                className="bg-red-50 text-red-600 px-6 py-2.5 rounded-full font-medium hover:bg-red-100 transition-colors border border-red-100"
+                className="bg-red-50 text-red-600 px-6 py-2.5 rounded-full font-medium hover:bg-red-100 transition-colors border border-red-100 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Leave Journey
+                {isLeaving ? "Leaving..." : "Leave Journey"}
               </button>
             </div>
           </header>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useMutation } from "@apollo/client/react";
 import { gql } from "@apollo/client";
 import { useRouter } from "next/navigation";
@@ -66,13 +66,19 @@ export default function Home() {
   const [journeyName, setJourneyName] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const endDateRef = useRef<HTMLInputElement>(null);
 
   const [createUser] = useMutation<CreateUserData>(CREATE_USER);
   const [createJourney] = useMutation<CreateJourneyData>(CREATE_JOURNEY);
   const [login] = useMutation<LoginData>(LOGIN);
 
+  const today = new Date().toISOString().split("T")[0];
+
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
+    setIsSubmitting(true);
     try {
       const userRes = await createUser({
         variables: { name, email: `${name}@example.com` },
@@ -96,8 +102,9 @@ export default function Home() {
         toast.success(`Journey Created! ID: ${newJId}. Redirecting...`);
         router.push(`/journey/${newJId}`);
       }
-    } catch (err) {
-      toast.error("Error creating journey: " + (err as Error).message);
+    } catch (e) {
+      toast.error("Error creating journey: " + (e as Error).message);
+      setIsSubmitting(false);
     }
   };
 
@@ -126,10 +133,11 @@ export default function Home() {
                       Your Name (Leader)
                     </label>
                     <input
-                      className="w-full p-2 border rounded"
+                      className="w-full p-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-black/5"
                       value={name}
                       onChange={(e) => setName(e.target.value)}
                       required
+                      placeholder="e.g. John Doe"
                     />
                   </div>
                   <div>
@@ -137,44 +145,70 @@ export default function Home() {
                       Journey Name
                     </label>
                     <input
-                      className="w-full p-2 border rounded"
+                      className="w-full p-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-black/5"
                       value={journeyName}
                       onChange={(e) => setJourneyName(e.target.value)}
                       required
+                      placeholder="e.g. Summer Trip 2025"
                     />
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium mb-1">
-                      Start Date
-                    </label>
-                    <input
-                      type="date"
-                      className="w-full p-2 border rounded"
-                      value={startDate}
-                      onChange={(e) => setStartDate(e.target.value)}
-                    />
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium mb-1">
+                        Start Date
+                      </label>
+                      <input
+                        type="date"
+                        className="w-full p-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-black/5"
+                        value={startDate}
+                        min={today}
+                        onChange={(e) => {
+                          setStartDate(e.target.value);
+                          if (e.target.value) {
+                            // Try to open the picker if supported, otherwise just focus
+                            if (
+                              endDateRef.current &&
+                              "showPicker" in endDateRef.current
+                            ) {
+                              try {
+                                (endDateRef.current as any).showPicker();
+                              } catch (e) {
+                                // ignore
+                              }
+                            }
+                            endDateRef.current?.focus();
+                          }
+                        }}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-1">
+                        End Date
+                      </label>
+                      <input
+                        ref={endDateRef}
+                        type="date"
+                        className="w-full p-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-black/5"
+                        value={endDate}
+                        min={startDate || today}
+                        onChange={(e) => setEndDate(e.target.value)}
+                      />
+                    </div>
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium mb-1">
-                      End Date
-                    </label>
-                    <input
-                      type="date"
-                      className="w-full p-2 border rounded"
-                      value={endDate}
-                      onChange={(e) => setEndDate(e.target.value)}
-                    />
-                  </div>
-                  <button className="w-full bg-green-600 text-white py-2 rounded hover:bg-green-700">
-                    Create & Get ID
+                  <button
+                    disabled={isSubmitting}
+                    className="w-full bg-black text-white py-3 rounded-full font-medium hover:opacity-80 transition-opacity mt-4 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isSubmitting ? "Creating..." : "Create & Get ID"}
                   </button>
                 </form>
               </div>
             </div>
-            <div className="flex-1 h-[400px] bg-gray-100 rounded-2xl flex items-center justify-center">
-              <span className="text-gray-400 font-medium">
-                Illustration / Image
-              </span>
+            <div className="flex-1 h-[400px] bg-gray-100 rounded-[34px] flex items-center justify-center overflow-hidden relative">
+              {/* Placeholder for illustration */}
+              <div className="absolute inset-0 bg-linear-to-br from-blue-50 to-purple-50 flex items-center justify-center">
+                <span className="text-gray-400 font-medium">Illustration</span>
+              </div>
             </div>
           </div>
         </section>

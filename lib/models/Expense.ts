@@ -15,6 +15,7 @@ export interface IExpense extends Document {
   description: string;
   splits: ISplit[];
   createdAt: Date;
+  expireAt?: Date;
 }
 
 const SplitSchema = new Schema({
