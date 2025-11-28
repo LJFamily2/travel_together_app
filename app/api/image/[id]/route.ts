@@ -10,7 +10,8 @@ export async function GET(
     await dbConnect();
     const { id } = await params;
 
-    const expense = await Expense.findById(id);
+    // Only fetch the imageBinary field to improve performance
+    const expense = await Expense.findById(id).select("imageBinary");
 
     if (!expense || !expense.imageBinary) {
       return new NextResponse("Image not found", { status: 404 });

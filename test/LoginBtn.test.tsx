@@ -30,7 +30,9 @@ describe("LoginBtn Component", () => {
 
     // Test click
     fireEvent.click(signInButton);
-    expect(signIn).toHaveBeenCalledWith("google");
+    expect(signIn).toHaveBeenCalledWith("google", {
+      callbackUrl: "/dashboard",
+    });
   });
 
   it("renders user email and 'Sign out' when authenticated", () => {
@@ -50,6 +52,6 @@ describe("LoginBtn Component", () => {
 
     // Test click
     fireEvent.click(signOutButton);
-    expect(signOut).toHaveBeenCalled();
+    expect(signOut).toHaveBeenCalledWith({ callbackUrl: "/" });
   });
 });

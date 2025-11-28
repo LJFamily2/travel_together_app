@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
-import { useMutation } from "@apollo/client/react";
+import { useState, useEffect } from "react";
+import { useMutation, useQuery as useApolloQuery } from "@apollo/client/react";
+import { useSession, signIn, signOut } from "next-auth/react";
 import { gql } from "@apollo/client";
 import { useRouter } from "next/navigation";
 
@@ -77,6 +78,17 @@ interface LoginData {
   };
 }
 
+interface JourneyShort {
+  id: string;
+  name: string;
+  leader: { id: string; name: string };
+  members: { id: string; name: string }[];
+}
+
+interface GetUserJourneysData {
+  getUserJourneys: JourneyShort[];
+}
+
 export default function Home() {
   const router = useRouter();
   const [mode, setMode] = useState<"join" | "create">("join");
@@ -90,6 +102,29 @@ export default function Home() {
   const [createUser] = useMutation<CreateUserData>(CREATE_USER);
   const [createJourney] = useMutation<CreateJourneyData>(CREATE_JOURNEY);
   const [login] = useMutation<LoginData>(LOGIN);
+  const { data: session, status } = useSession();
+
+  const GET_USER_JOURNEYS = gql`
+    query GetUserJourneys {
+      getUserJourneys {
+        id
+        name
+        leader {
+          id
+          name
+        }
+        members {
+          id
+          name
+        }
+      }
+    }
+  `;
+
+  const { data: userJourneysData, loading: loadingUserJourneys } =
+    useApolloQuery<GetUserJourneysData>(GET_USER_JOURNEYS, {
+      skip: status !== "authenticated",
+    });
 
   const handleJoin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -134,10 +169,71 @@ export default function Home() {
     }
   };
 
+  useEffect(() => {
+    if (status === "authenticated" && session?.user) {
+      const appJwt = (session.user as unknown as Record<string, string>).appJwt;
+      if (appJwt) localStorage.setItem("guestToken", appJwt);
+    }
+  }, [status, session]);
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900">
       <div className="bg-white dark:bg-gray-800 p-8 rounded shadow-md w-96">
         <h1 className="text-2xl font-bold mb-6 text-center">Travel Together</h1>
+
+        {/* OAuth Sign-in */}
+        <div className="mb-4 flex justify-center">
+          {status === "authenticated" ? (
+            <div className="flex gap-2 items-center">
+              <span className="text-sm text-gray-600">
+                Signed in as {session?.user?.name}
+              </span>
+              <button
+                onClick={() => {
+                  // Clear app token and sign out, then redirect to home
+                  try {
+                    localStorage.removeItem("guestToken");
+                  } catch {
+                    /* ignore */
+                  }
+                  signOut({ callbackUrl: "/" });
+                }}
+                className="ml-2 bg-red-500 text-white px-3 py-1 rounded"
+              >
+                Sign out
+              </button>
+            </div>
+          ) : (
+            <button
+              className="w-full bg-slate-700 text-white py-2 rounded hover:bg-slate-800 mb-2"
+              onClick={() => signIn("google", { callbackUrl: "/dashboard" })}
+            >
+              Sign in with Google
+            </button>
+          )}
+        </div>
+
+        {status === "authenticated" && (
+          <div className="mb-6">
+            <h2 className="text-lg font-semibold mb-2">Your Journeys</h2>
+            {loadingUserJourneys ? (
+              <div>Loading...</div>
+            ) : (
+              <ul className="space-y-2">
+                {userJourneysData?.getUserJourneys?.map((j: JourneyShort) => (
+                  <li key={j.id}>
+                    <button
+                      onClick={() => router.push(`/journey/${j.id}`)}
+                      className="text-left w-full underline text-blue-500"
+                    >
+                      {j.name}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
 
         <div className="flex gap-4 mb-6 justify-center">
           <button

@@ -1,23 +1,35 @@
 import express, { Request, Response } from "express";
 import http from "http";
 import { Server, Socket } from "socket.io";
+import dotenv from "dotenv";
+import path from "path";
+
+// Load environment variables from the parent directory's .env file
+dotenv.config({ path: path.resolve(__dirname, "../.env") });
 
 const app = express();
 const server = http.createServer(app);
 const CLIENT_URL = process.env.CLIENT_URL || "http://localhost:3000";
 const SOCKET_SECRET = process.env.SOCKET_SECRET || "change_me_in_prod";
 
+const allowedOrigins = [
+  CLIENT_URL,
+  CLIENT_URL.replace("localhost", "127.0.0.1"),
+];
+
 const io = new Server(server, {
   cors: {
-    origin: CLIENT_URL,
+    origin: allowedOrigins,
     methods: ["GET", "POST", "PUT", "DELETE"],
   },
 });
 
 app.use(express.json());
 
+const isDev = process.env.NODE_ENV !== "production";
+
 io.on("connection", (socket: Socket) => {
-  console.log("A user connected:", socket.id);
+  if (isDev) console.debug("A user connected:", socket.id);
 
   socket.on("join_journey", (journeyId: string) => {
     if (journeyId && typeof journeyId === "string") {
@@ -25,12 +37,12 @@ io.on("connection", (socket: Socket) => {
       // Adjust regex based on your ID format (MongoDB ObjectIds are hex)
       const safeId = journeyId.replace(/[^a-zA-Z0-9-_]/g, "");
       socket.join(safeId);
-      console.log(`User ${socket.id} joined journey: ${safeId}`);
+      if (isDev) console.debug(`User ${socket.id} joined journey: ${safeId}`);
     }
   });
 
   socket.on("disconnect", () => {
-    console.log("User disconnected:", socket.id);
+    if (isDev) console.debug("User disconnected:", socket.id);
   });
 });
 
@@ -39,6 +51,10 @@ app.post("/notify-update", (req: Request, res: Response) => {
   const authHeader = req.headers["x-api-key"];
 
   if (authHeader !== SOCKET_SECRET) {
+    console.warn(
+      "Unauthorized notify-update attempt, x-api-key provided:",
+      authHeader
+    );
     return res.status(403).json({ error: "Unauthorized" });
   }
 
@@ -48,10 +64,21 @@ app.post("/notify-update", (req: Request, res: Response) => {
     return res.status(400).json({ error: "Invalid journeyId" });
   }
 
-  console.log(`Notification received for journey: ${journeyId}`);
+  const safeId = journeyId.replace(/[^a-zA-Z0-9-_]/g, "");
+  // Broadcast to everyone in the journey room (sanitized)
+  io.to(safeId).emit("update_data");
 
-  // Broadcast to everyone in the journey room
-  io.to(journeyId).emit("update_data");
+  // If no members were found in the sanitized room, attempt an emit to the raw journeyId as a fallback
+  // If we need a fallback to raw id, do that silently (no debug logs)
+  const room = io.sockets.adapter.rooms.get(safeId);
+  const memberCount = room ? room.size : 0;
+  if (memberCount === 0 && safeId !== journeyId) {
+    const rawRoom = io.sockets.adapter.rooms.get(journeyId);
+    const rawCount = rawRoom ? rawRoom.size : 0;
+    if (rawCount > 0) {
+      io.to(journeyId).emit("update_data");
+    }
+  }
 
   res
     .status(200)
@@ -60,5 +87,6 @@ app.post("/notify-update", (req: Request, res: Response) => {
 
 const PORT = process.env.PORT || 4000;
 server.listen(PORT, () => {
-  console.log(`Socket server running on port ${PORT}`);
+  // Keep this informative log to make it clear the server started; not a debug message.
+  console.info(`Socket server running on port ${PORT}`);
 });

@@ -35,6 +35,7 @@ const typeDefs = gql`
     members: [User]!
     status: String!
     createdAt: String!
+    expireAt: String
     expenses: [Expense]
   }
 
@@ -58,6 +59,7 @@ const typeDefs = gql`
 
   type Query {
     getJourneyDetails(journeyId: ID!): Journey
+    getUserJourneys: [Journey]
     getUsers: [User]
     me: User
   }
@@ -95,6 +97,7 @@ const typeDefs = gql`
       accountNumber: String
       accountName: String
     ): User
+    leaveJourney(journeyId: ID!, leaderTimezoneOffsetMinutes: Int): Journey
   }
 
   input SplitInput {

@@ -3,6 +3,7 @@ import dbConnect from "../../mongodb";
 import Expense, { IExpense } from "../../models/Expense";
 import User from "../../models/User";
 import { notifyJourneyUpdate } from "../../utils/notifySocket";
+import { refreshJourneyExpiration } from "../../utils/expiration";
 
 interface SplitInput {
   userId: string;
@@ -55,6 +56,14 @@ const expenseResolvers = {
           reason: s.reason,
         })),
       });
+
+      // Inherit expireAt from Journey if it exists
+      // Also refresh the journey expiration (Sliding Window)
+      const newExpireAt = await refreshJourneyExpiration(journeyId);
+      if (newExpireAt) {
+        newExpense.expireAt = newExpireAt;
+      }
+
       await newExpense.save();
 
       // Notify socket server about the update
@@ -131,6 +140,9 @@ const expenseResolvers = {
 
       await expense.save();
 
+      // Refresh expiration on activity
+      await refreshJourneyExpiration(expense.journeyId.toString());
+
       // Notify socket server about the update
       await notifyJourneyUpdate(expense.journeyId.toString());
 
@@ -155,13 +167,19 @@ const expenseResolvers = {
       const journeyId = expense.journeyId.toString();
       await Expense.findByIdAndDelete(expenseId);
 
+      // Refresh expiration on activity
+      await refreshJourneyExpiration(journeyId);
+
       await notifyJourneyUpdate(journeyId);
       return true;
     },
   },
   Expense: {
     payer: (parent: IExpense) => parent.payerId,
-    hasImage: (parent: IExpense) => !!parent.imageBinary,
+    hasImage: (parent: any) => {
+      if (parent.hasImage !== undefined) return parent.hasImage;
+      return !!parent.imageBinary;
+    },
   },
   Split: {
     user: async (parent: { userId: string }) => {

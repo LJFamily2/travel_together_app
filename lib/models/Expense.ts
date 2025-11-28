@@ -32,12 +32,15 @@ const ExpenseSchema: Schema = new Schema(
     imageBinary: { type: Buffer }, // Storing directly for now as per schema description, but GridFS is recommended for large files
     description: { type: String, required: true },
     splits: [SplitSchema],
+    expireAt: { type: Date },
   },
   { timestamps: true }
 );
 
 // PERFORMANCE OPTIMIZATION:
 ExpenseSchema.index({ journeyId: 1 });
+// TTL Index for auto-deletion
+ExpenseSchema.index({ expireAt: 1 }, { expireAfterSeconds: 0 });
 
 const Expense: Model<IExpense> =
   mongoose.models.Expense || mongoose.model<IExpense>("Expense", ExpenseSchema);

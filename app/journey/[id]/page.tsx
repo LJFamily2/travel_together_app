@@ -1,19 +1,22 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useQuery, useApolloClient } from "@apollo/client/react";
+import { useQuery, useMutation, useApolloClient } from "@apollo/client/react";
 import { gql } from "@apollo/client";
 import { useParams, useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 import AddExpenseForm from "../../components/AddExpenseForm";
 import ActivityFeed from "../../components/ActivityFeed";
 import MyTotalSpend from "../../components/MyTotalSpend";
 import SettleUpModal from "../../components/SettleUpModal";
+import { useSocket } from "../../../lib/hooks/useSocket";
 
 const GET_DASHBOARD_DATA = gql`
   query GetDashboardData($journeyId: ID!) {
     getJourneyDetails(journeyId: $journeyId) {
       id
       name
+      expireAt
       leader {
         id
         name
@@ -87,6 +90,7 @@ interface DashboardData {
   getJourneyDetails: {
     id: string;
     name: string;
+    expireAt?: string;
     leader: {
       id: string;
       name: string;
@@ -115,31 +119,92 @@ interface DashboardData {
   };
 }
 
+interface LeaveJourneyResponse {
+  leaveJourney: {
+    id: string;
+    name: string;
+    expireAt?: string | null;
+    leader: { id: string; name: string };
+    members: { id: string; name: string }[];
+  };
+}
+
+const LEAVE_JOURNEY = gql`
+  mutation LeaveJourney($journeyId: ID!, $leaderTimezoneOffsetMinutes: Int) {
+    leaveJourney(
+      journeyId: $journeyId
+      leaderTimezoneOffsetMinutes: $leaderTimezoneOffsetMinutes
+    ) {
+      id
+      name
+      expireAt
+      leader {
+        id
+        name
+      }
+      members {
+        id
+        name
+      }
+    }
+  }
+`;
+
 export default function JourneyDashboard() {
   const client = useApolloClient();
   const params = useParams();
   const router = useRouter();
   const journeyId = params.id as string;
   const [isSettleModalOpen, setIsSettleModalOpen] = useState(false);
+  const [isEndingSoon, setIsEndingSoon] = useState(false);
 
-  const { data, loading, error } = useQuery<DashboardData>(GET_DASHBOARD_DATA, {
-    variables: { journeyId },
-    pollInterval: 5000,
+  const { data, loading, error, refetch } = useQuery<DashboardData>(
+    GET_DASHBOARD_DATA,
+    {
+      variables: { journeyId },
+      fetchPolicy: "network-only",
+    }
+  );
+
+  const [leaveJourney] = useMutation<
+    LeaveJourneyResponse,
+    { journeyId: string; leaderTimezoneOffsetMinutes?: number }
+  >(LEAVE_JOURNEY);
+
+  useSocket(journeyId, () => {
+    refetch();
   });
 
+  const { status } = useSession();
+
+  const journey = data?.getJourneyDetails;
+  const currentUser = data?.me;
+
   useEffect(() => {
-    // If no token, redirect to home
-    if (typeof window !== "undefined" && !localStorage.getItem("guestToken")) {
-      router.push("/");
+    if (journey?.expireAt) {
+      // Use setTimeout to avoid synchronous state update warning
+      const timer = setTimeout(() => {
+        const timeLeft = new Date(journey.expireAt!).getTime() - Date.now();
+        const isSoon = timeLeft < 24 * 60 * 60 * 1000;
+        setIsEndingSoon(isSoon);
+      }, 0);
+      return () => clearTimeout(timer);
     }
-  }, [router]);
+  }, [journey?.expireAt]);
+
+  useEffect(() => {
+    // If no token and no active session, redirect to home
+    if (typeof window !== "undefined") {
+      const token = localStorage.getItem("guestToken");
+      if (!token && status !== "authenticated" && status !== "loading") {
+        router.push("/");
+      }
+    }
+  }, [router, status]);
 
   if (loading && !data) return <div className="p-8">Loading dashboard...</div>;
   if (error)
     return <div className="p-8 text-red-500">Error: {error.message}</div>;
-
-  const journey = data?.getJourneyDetails;
-  const currentUser = data?.me;
 
   if (!journey) return <div className="p-8">Journey not found</div>;
   if (!currentUser)
@@ -163,9 +228,72 @@ export default function JourneyDashboard() {
           </button>
           <button
             onClick={async () => {
-              localStorage.removeItem("guestToken");
-              await client.clearStore();
-              router.push("/");
+              if (confirm("Are you sure you want to leave this journey?")) {
+                try {
+                  const timezoneOffset = -new Date().getTimezoneOffset();
+                  const result = (await leaveJourney({
+                    variables: {
+                      journeyId,
+                      leaderTimezoneOffsetMinutes: timezoneOffset,
+                    },
+                  })) as {
+                    data?: LeaveJourneyResponse;
+                  };
+                  const updatedJourney = result?.data?.leaveJourney;
+                  if (updatedJourney) {
+                    // Update the cache so any clients that query this journey get the new expireAt
+                    try {
+                      // Read the existing cache result
+                      const existing = client.readQuery<DashboardData>({
+                        query: GET_DASHBOARD_DATA,
+                        variables: { journeyId },
+                      });
+
+                      if (existing && existing.getJourneyDetails) {
+                        const merged = {
+                          ...existing,
+                          getJourneyDetails: {
+                            ...existing.getJourneyDetails,
+                            ...updatedJourney,
+                            // Ensure fields that might be missing from the mutation
+                            // result are preserved from the existing cache value.
+                            expenses: existing.getJourneyDetails.expenses,
+                            members:
+                              updatedJourney.members ||
+                              existing.getJourneyDetails.members,
+                          },
+                        } as DashboardData;
+
+                        client.writeQuery({
+                          query: GET_DASHBOARD_DATA,
+                          variables: { journeyId },
+                          data: merged,
+                        });
+                      } else {
+                        // If no existing cache entry, refetch to populate cache
+                        try {
+                          await refetch();
+                        } catch (err) {
+                          console.warn(
+                            "Could not refetch data after leaveJourney:",
+                            err
+                          );
+                        }
+                      }
+                    } catch (cacheError) {
+                      console.warn(
+                        "Could not write updated journey to cache:",
+                        cacheError
+                      );
+                    }
+                  }
+                  localStorage.removeItem("guestToken");
+                  await client.clearStore();
+                  router.push("/");
+                } catch (e) {
+                  alert("Failed to leave journey: " + (e as Error).message);
+                }
+              }
             }}
             className="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600"
           >
@@ -173,6 +301,39 @@ export default function JourneyDashboard() {
           </button>
         </div>
       </header>
+
+      {journey.expireAt && isEndingSoon && (
+        <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6 rounded shadow-sm animate-pulse">
+          <div className="flex items-center">
+            <div className="py-1">
+              <svg
+                className="fill-current h-6 w-6 text-red-500 mr-4"
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 20 20"
+              >
+                <path d="M2.93 17.07A10 10 0 1 1 17.07 2.93 10 10 0 0 1 2.93 17.07zm12.73-1.41A8 8 0 1 0 4.34 4.34a8 8 0 0 0 11.32 11.32zM9 11V9h2v6H9v-4zm0-6h2v2H9V5z" />
+              </svg>
+            </div>
+            <div>
+              <p className="font-bold">⚠️ Journey Ending Soon</p>
+              <p className="text-sm">
+                The leader has left or the journey is expiring. This room will
+                be deleted on {new Date(journey.expireAt).toLocaleString()}{" "}
+                (your local time).
+                <br />
+                VN time:{" "}
+                {new Intl.DateTimeFormat(undefined, {
+                  timeZone: "Asia/Ho_Chi_Minh",
+                  dateStyle: "full",
+                  timeStyle: "long",
+                }).format(new Date(journey.expireAt))}
+                <br />
+                Please save your data immediately.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Left Column: Stats & Actions */}

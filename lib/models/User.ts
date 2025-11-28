@@ -29,9 +29,13 @@ const UserSchema: Schema = new Schema(
       },
     },
     isGuest: { type: Boolean, default: false },
+    expireAt: { type: Date },
   },
   { timestamps: true }
 );
+
+// TTL Index for auto-deletion of guest users
+UserSchema.index({ expireAt: 1 }, { expireAfterSeconds: 0 });
 
 // Check if the model is already defined to prevent overwriting during hot reloads
 const User: Model<IUser> =

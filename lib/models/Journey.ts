@@ -8,6 +8,7 @@ export interface IJourney extends Document {
   members: mongoose.Types.ObjectId[];
   status: "active" | "complete";
   createdAt: Date;
+  expireAt?: Date;
 }
 
 const JourneySchema: Schema = new Schema(
@@ -18,9 +19,13 @@ const JourneySchema: Schema = new Schema(
     leaderId: { type: Schema.Types.ObjectId, ref: "User", required: true },
     members: [{ type: Schema.Types.ObjectId, ref: "User" }],
     status: { type: String, enum: ["active", "complete"], default: "active" },
+    expireAt: { type: Date },
   },
   { timestamps: true }
 );
+
+// TTL Index: Documents will be automatically deleted when the current time matches 'expireAt'
+JourneySchema.index({ expireAt: 1 }, { expireAfterSeconds: 0 });
 
 const Journey: Model<IJourney> =
   mongoose.models.Journey || mongoose.model<IJourney>("Journey", JourneySchema);

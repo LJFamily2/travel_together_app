@@ -13,16 +13,20 @@ export const useSocket = (
     // Initialize socket connection
     // Assuming the socket server is running on port 4000
     const socketUrl =
-      process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:4000";
+      process.env.NEXT_PUBLIC_SOCKET_URL || "http://127.0.0.1:4000";
     socket = io(socketUrl);
 
     socket.on("connect", () => {
-      console.log("Connected to socket server"); 
       socket.emit("join_journey", journeyId);
+    });
+    socket.on("connect_error", (err) => {
+      console.error("Socket connect_error:", err.message);
+    });
+    socket.on("error", (err) => {
+      console.error("Socket error:", err);
     });
 
     socket.on("update_data", () => {
-      console.log("Received update_data event");
       onUpdate();
     });
 
