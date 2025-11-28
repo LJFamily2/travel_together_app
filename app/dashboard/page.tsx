@@ -30,6 +30,15 @@ interface JourneyShort {
   members: { id: string; name: string }[];
 }
 
+interface JoinJourneyData {
+  joinJourney: { id: string };
+}
+
+interface JoinJourneyVars {
+  journeyId: string;
+  userId: string;
+}
+
 export default function DashboardPage() {
   const router = useRouter();
   const { data: session } = useSession();
@@ -47,7 +56,10 @@ export default function DashboardPage() {
     }
   `;
 
-  const [joinJourney, { loading: joining }] = useMutation(JOIN_JOURNEY);
+  const [joinJourney, { loading: joining }] = useMutation<
+    JoinJourneyData,
+    JoinJourneyVars
+  >(JOIN_JOURNEY);
 
   React.useEffect(() => {
     // Check both localStorage token and session returned appJwt
@@ -100,11 +112,12 @@ export default function DashboardPage() {
               onClick={async () => {
                 try {
                   if (!joinJourneyId) return alert("Please enter a Journey ID");
-                  if (!session?.user?.id) return alert("Please sign in first");
+                  const userId = (session?.user as unknown as { id?: string })?.id;
+                  if (!userId) return alert("Please sign in first");
                   const res = await joinJourney({
                     variables: {
                       journeyId: joinJourneyId,
-                      userId: session.user.id,
+                      userId,
                     },
                   });
                   const jid = res?.data?.joinJourney?.id ?? joinJourneyId;
