@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useMutation, gql } from "@apollo/client";
+import { useState, useEffect, useCallback } from "react";
+import { gql } from "@apollo/client";
+import { useMutation } from "@apollo/client/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import toast from "react-hot-toast";
@@ -27,7 +28,17 @@ export default function JoinPage() {
   const [name, setName] = useState("");
   const [isJoining, setIsJoining] = useState(false);
 
-  const [joinJourney] = useMutation(JOIN_JOURNEY_VIA_TOKEN);
+  type JoinJourneyResponse = {
+    joinJourneyViaToken: {
+      token?: string | null;
+      user?: { id: string; name?: string | null } | null;
+      journeySlug?: string | null;
+    };
+  };
+
+  const [joinJourney] = useMutation<JoinJourneyResponse>(
+    JOIN_JOURNEY_VIA_TOKEN
+  );
 
   useEffect(() => {
     if (!token) {
@@ -36,7 +47,7 @@ export default function JoinPage() {
     }
   }, [token, router]);
 
-  const handleJoin = async () => {
+  const handleJoin = useCallback(async () => {
     if (!token) return;
     if (!session && !name.trim()) {
       toast.error("Please enter your name");
@@ -52,7 +63,11 @@ export default function JoinPage() {
         },
       });
 
-      const { token: authToken, journeySlug } = data.joinJourneyViaToken;
+      const resp = data?.joinJourneyViaToken;
+      if (!resp) {
+        throw new Error("Invalid response from server");
+      }
+      const { token: authToken, journeySlug } = resp;
 
       if (authToken) {
         localStorage.setItem("guestToken", authToken);
@@ -64,14 +79,18 @@ export default function JoinPage() {
       toast.error("Failed to join: " + (e as Error).message);
       setIsJoining(false);
     }
-  };
+  }, [token, session, name, joinJourney, router]);
 
   // Auto-join if logged in
   useEffect(() => {
     if (session && token && !isJoining) {
-      handleJoin();
+      // Avoid calling setState synchronously within an effect which can cause cascading renders
+      const id = setTimeout(() => {
+        void handleJoin();
+      }, 0);
+      return () => clearTimeout(id);
     }
-  }, [session, token]);
+  }, [session, token, isJoining, handleJoin]);
 
   if (!token) return null;
 

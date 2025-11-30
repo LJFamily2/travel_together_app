@@ -248,9 +248,9 @@ export default function JourneyDashboard() {
     if (!journeyId) return;
     try {
       const { data } = await generateToken({ variables: { journeyId } });
-      setJoinToken(data.generateJoinToken);
+      setJoinToken(data?.generateJoinToken || "");
       setShowQr(true);
-    } catch (e) {
+    } catch {
       toast.error("Failed to generate QR code");
     }
   };
