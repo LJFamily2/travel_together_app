@@ -7,8 +7,6 @@ import { useParams, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import toast from "react-hot-toast";
 import { QRCodeSVG } from "qrcode.react";
-import FigmaNavbar from "../../components/FigmaNavbar";
-import FigmaFooter from "../../components/FigmaFooter";
 import AddExpenseForm from "../../components/AddExpenseForm";
 import ActivityFeed from "../../components/ActivityFeed";
 import MyTotalSpend from "../../components/MyTotalSpend";
@@ -315,7 +313,6 @@ export default function JourneyDashboard() {
 
   return (
     <div className="min-h-screen bg-(--color-background) text-(--color-foreground) font-sans flex flex-col">
-      <FigmaNavbar />
 
       <main className="grow w-full max-w-[1440px] mx-auto p-4 md:p-8">
         <div className="bg-white rounded-[34px] p-6 md:p-10 shadow-sm min-h-[80vh]">
@@ -430,7 +427,6 @@ export default function JourneyDashboard() {
         </div>
       </main>
 
-      <FigmaFooter />
 
       <SettleUpModal
         journeyId={journey.id}

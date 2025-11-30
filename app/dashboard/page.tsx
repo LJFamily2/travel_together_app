@@ -6,8 +6,6 @@ import { useQuery, useMutation } from "@apollo/client/react";
 import { useRouter } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
 import toast from "react-hot-toast";
-import FigmaNavbar from "../components/FigmaNavbar";
-import FigmaFooter from "../components/FigmaFooter";
 
 const GET_USER_JOURNEYS = gql`
   query GetUserJourneys {
@@ -108,7 +106,6 @@ export default function DashboardPage() {
   const journeys: JourneyShort[] = data?.getUserJourneys ?? [];
   return (
     <div className="min-h-screen bg-(--color-background) text-(--color-foreground) font-sans flex flex-col">
-      <FigmaNavbar />
 
       <main className="grow w-full max-w-[1440px] mx-auto p-4 md:p-8 flex justify-center items-start mt-8">
         <div className="w-full max-w-3xl bg-white rounded-[34px] p-8 md:p-12 shadow-sm">
@@ -228,7 +225,6 @@ export default function DashboardPage() {
         </div>
       </main>
 
-      <FigmaFooter />
     </div>
   );
 }
