@@ -15,8 +15,6 @@ export const useSocket = (
     const socketUrl =
       process.env.NEXT_PUBLIC_SOCKET_URL || "http://127.0.0.1:4000";
 
-    console.debug("Socket connecting to:", socketUrl);
-
     socket = io(socketUrl);
 
     socket.on("connect", () => {

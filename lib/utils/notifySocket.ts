@@ -2,7 +2,6 @@ export const notifyJourneyUpdate = async (journeyId: string) => {
   // PRIORITIZE internal URL for server-to-server communication
   // This avoids issues where the VPS cannot resolve its own public domain
   const socketUrl =
-    process.env.SOCKET_SERVER_URL ||
     process.env.NEXT_PUBLIC_SOCKET_URL ||
     "http://127.0.0.1:4000";
 
@@ -12,10 +11,6 @@ export const notifyJourneyUpdate = async (journeyId: string) => {
     // Add a short timeout to prevent long delays if the socket server is down
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 2000); // 2 second timeout
-
-    console.debug(
-      `[notifyJourneyUpdate] Sending update to ${socketUrl} for journey ${journeyId}`
-    );
 
     const response = await fetch(`${socketUrl}/notify-update`, {
       method: "POST",

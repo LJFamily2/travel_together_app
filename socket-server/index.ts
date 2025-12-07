@@ -15,10 +15,6 @@ const server = http.createServer(app);
 const CLIENT_URL = process.env.CLIENT_URL || "http://localhost:3000";
 const SOCKET_SECRET = process.env.SOCKET_SECRET || "change_me_in_prod";
 
-console.log(`Socket Server starting...`);
-console.log(`- CLIENT_URL (CORS origin): ${CLIENT_URL}`);
-console.log(`- SOCKET_SECRET configured: ${SOCKET_SECRET ? "Yes" : "No"}`);
-
 const allowedOrigins = [
   CLIENT_URL,
   CLIENT_URL.replace("localhost", "127.0.0.1"),
