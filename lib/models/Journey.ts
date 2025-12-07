@@ -10,6 +10,10 @@ export interface IJourney extends Document {
   status: "active" | "complete";
   createdAt: Date;
   expireAt?: Date;
+  // Single active join token metadata
+  joinTokenJti?: string;
+  joinTokenExpiresAt?: Date;
+  joinTokenUsed?: boolean;
 }
 
 const JourneySchema: Schema = new Schema(
@@ -22,6 +26,10 @@ const JourneySchema: Schema = new Schema(
     members: [{ type: Schema.Types.ObjectId, ref: "User" }],
     status: { type: String, enum: ["active", "complete"], default: "active" },
     expireAt: { type: Date },
+    // Token metadata - used for single-active token or revocation
+    joinTokenJti: { type: String },
+    joinTokenExpiresAt: { type: Date },
+    joinTokenUsed: { type: Boolean, default: false },
   },
   { timestamps: true }
 );

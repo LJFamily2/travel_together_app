@@ -6,7 +6,8 @@ import { gql } from "@apollo/client";
 import { useParams, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import toast from "react-hot-toast";
-import { QRCodeSVG } from "qrcode.react";
+import Image from "next/image";
+import StyledQRCode from "../../components/StyledQRCode";
 import AddExpenseForm from "../../components/AddExpenseForm";
 import ActivityFeed from "../../components/ActivityFeed";
 import MyTotalSpend from "../../components/MyTotalSpend";
@@ -246,7 +247,20 @@ export default function JourneyDashboard() {
     if (!journeyId) return;
     try {
       const { data } = await generateToken({ variables: { journeyId } });
-      setJoinToken(data?.generateJoinToken || "");
+      const jwtToken = data?.generateJoinToken || "";
+      // try to extract jti from token (JWT) to keep QR small
+      let jti = "";
+      try {
+        const payload = jwtToken.split(".")[1];
+        if (payload) {
+          const b64 = payload.replace(/-/g, "+").replace(/_/g, "/");
+          const decoded = JSON.parse(atob(b64));
+          jti = decoded?.jti || "";
+        }
+      } catch {
+        // ignore decode errors and fallback to full token
+      }
+      setJoinToken(jti || jwtToken);
       setShowQr(true);
     } catch {
       toast.error("Failed to generate QR code");
@@ -313,7 +327,6 @@ export default function JourneyDashboard() {
 
   return (
     <div className="min-h-screen bg-(--color-background) text-(--color-foreground) font-sans flex flex-col">
-
       <main className="grow w-full max-w-[1440px] mx-auto p-4 md:p-8">
         <div className="bg-white rounded-[34px] p-6 md:p-10 shadow-sm min-h-[80vh]">
           <header className="mb-8 flex justify-between items-center flex-wrap gap-4 border-b border-gray-100 pb-6">
@@ -325,12 +338,36 @@ export default function JourneyDashboard() {
                 <span className="bg-gray-100 px-3 py-1 rounded-full text-sm">
                   Leader: {journey.leader.name}
                 </span>
-                <button
-                  onClick={handleShowQr}
-                  className="bg-blue-100 text-blue-600 px-3 py-1 rounded-full text-sm hover:bg-blue-200 transition-colors"
-                >
-                  Share QR
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleShowQr}
+                    className="bg-blue-100 text-blue-600 px-3 py-1 rounded-full text-sm hover:bg-blue-200 transition-colors flex items-center"
+                    title="Generate a single-use join token valid for 5 minutes"
+                    aria-label="Generate a single-use join token"
+                  >
+                    Share QR
+                  </button>
+                  <span
+                    className="text-gray-400"
+                    title="Tokens are single-use; generating a new QR invalidates previous tokens. Token expires in 5 minutes."
+                    aria-hidden
+                  >
+                    <svg
+                      className="w-4 h-4"
+                      xmlns="http://www.w3.org/2000/svg"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth={2}
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <circle cx="12" cy="12" r="10" />
+                      <line x1="12" y1="8" x2="12" y2="12" />
+                      <line x1="12" y1="16" x2="12.01" y2="16" />
+                    </svg>
+                  </span>
+                </div>
               </div>
             </div>
             <div className="flex gap-3">
@@ -427,7 +464,6 @@ export default function JourneyDashboard() {
         </div>
       </main>
 
-
       <SettleUpModal
         journeyId={journey.id}
         currentUser={currentUser}
@@ -458,17 +494,53 @@ export default function JourneyDashboard() {
                 />
               </svg>
             </button>
+            <Image
+              src="/icons/plane.svg"
+              alt=""
+              aria-hidden
+              className="absolute top-4 left-4 opacity-90 pointer-events-none"
+              width={32}
+              height={32}
+            />
             <h3 className="text-xl font-bold mb-4">Join Journey</h3>
-            <div className="flex justify-center mb-4">
-              <QRCodeSVG
+            <div className="flex justify-center mb-4 relative">
+              <Image
+                src="/images/map-bg.svg"
+                alt=""
+                aria-hidden
+                className="absolute inset-0 object-cover opacity-10 pointer-events-none"
+                fill
+              />
+              <StyledQRCode
                 value={`${
                   typeof window !== "undefined" ? window.location.origin : ""
                 }/join?token=${joinToken}`}
-                size={200}
+                size={220}
+                className="rounded-lg bg-white p-3 shadow-sm"
               />
             </div>
-            <p className="text-sm text-gray-500 mb-4">
+            <p className="text-sm text-gray-500 mb-4 inline-flex items-center gap-2">
               Scan this QR code to join. Valid for 5 minutes.
+              <span
+                className="text-gray-400"
+                title="These tokens are single-use. Generating a new QR invalidates previous tokens."
+                aria-hidden
+              >
+                <svg
+                  className="w-4 h-4"
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth={2}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <circle cx="12" cy="12" r="10" />
+                  <line x1="12" y1="8" x2="12" y2="12" />
+                  <line x1="12" y1="16" x2="12.01" y2="16" />
+                </svg>
+              </span>
             </p>
           </div>
         </div>

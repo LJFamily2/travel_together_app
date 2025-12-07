@@ -14,6 +14,7 @@ describe("Guest Authentication Resolver", () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    process.env.JWT_SECRET = "test-secret";
   });
 
   it("should create a guest user, add to journey, and return token", async () => {
@@ -37,8 +38,11 @@ describe("Guest Authentication Resolver", () => {
       _id: mockJourneyId,
       members: [],
       save: jest.fn().mockResolvedValue(true),
+      populate: jest.fn().mockReturnThis(),
     };
-    (Journey.findById as jest.Mock).mockResolvedValue(mockJourneyInstance);
+    (Journey.findById as jest.Mock).mockReturnValue({
+      populate: jest.fn().mockResolvedValue(mockJourneyInstance),
+    });
 
     // Mock JWT signing
     (jwt.sign as jest.Mock).mockReturnValue(mockToken);
@@ -57,10 +61,11 @@ describe("Guest Authentication Resolver", () => {
     });
     expect(mockUserInstance.save).toHaveBeenCalled();
 
-    // 2. Check Journey update
+    // 2. Check Journey update (findByIdAndUpdate should have been called to $push the new member)
     expect(Journey.findById).toHaveBeenCalledWith(mockJourneyId);
-    expect(mockJourneyInstance.members).toContain(mockUserId);
-    expect(mockJourneyInstance.save).toHaveBeenCalled();
+    expect(Journey.findByIdAndUpdate).toHaveBeenCalledWith(mockJourneyId, {
+      $push: { members: mockUserId },
+    });
 
     // 3. Check JWT generation
     expect(jwt.sign).toHaveBeenCalledWith(
@@ -89,7 +94,9 @@ describe("Guest Authentication Resolver", () => {
     (User as unknown as jest.Mock).mockImplementation(() => mockUserInstance);
 
     // Mock Journey not found
-    (Journey.findById as jest.Mock).mockResolvedValue(null);
+    (Journey.findById as jest.Mock).mockReturnValue({
+      populate: jest.fn().mockResolvedValue(null),
+    });
 
     // Act & Assert
     await expect(
