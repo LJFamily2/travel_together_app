@@ -4,13 +4,19 @@ import { Server, Socket } from "socket.io";
 import dotenv from "dotenv";
 import path from "path";
 
-// Load environment variables from the parent directory's .env file
+// Load environment variables
+// 1. Try to load from .env in the current directory first
+// 2. Then try to load from the parent directory's .env file (does not overwrite existing variables)
 dotenv.config({ path: path.resolve(__dirname, "../.env") });
 
 const app = express();
 const server = http.createServer(app);
 const CLIENT_URL = process.env.CLIENT_URL || "http://localhost:3000";
 const SOCKET_SECRET = process.env.SOCKET_SECRET || "change_me_in_prod";
+
+console.log(`Socket Server starting...`);
+console.log(`- CLIENT_URL (CORS origin): ${CLIENT_URL}`);
+console.log(`- SOCKET_SECRET configured: ${SOCKET_SECRET ? "Yes" : "No"}`);
 
 const allowedOrigins = [
   CLIENT_URL,
