@@ -276,7 +276,7 @@ export default function SettleUpModal({
           <h3 className="text-lg font-bold">Settle Up</h3>
           <button
             onClick={() => setShowBankInfo(!showBankInfo)}
-            className="text-xs text-blue-600 hover:underline"
+            className="text-xs text-blue-600 hover:underline cursor-pointer"
           >
             {showBankInfo ? "Hide My Bank Info" : "Edit My Bank Info"}
           </button>
@@ -310,7 +310,7 @@ export default function SettleUpModal({
               <button
                 onClick={handleUpdateBankInfo}
                 disabled={updatingBank}
-                className="w-full py-1 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700"
+                className="w-full py-1 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 cursor-pointer"
               >
                 {updatingBank ? "Saving..." : "Save Bank Info"}
               </button>
@@ -477,14 +477,14 @@ export default function SettleUpModal({
         <div className="flex justify-end gap-2 mt-6">
           <button
             onClick={onClose}
-            className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-full transition-colors"
+            className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-full transition-colors cursor-pointer"
           >
             Cancel
           </button>
           <button
             onClick={handleSettle}
             disabled={loading}
-            className="px-4 py-2 bg-green-600 text-white rounded-full hover:bg-green-700 transition-colors"
+            className="px-4 py-2 bg-green-600 text-white rounded-full hover:bg-green-700 transition-colors cursor-pointer"
           >
             {loading ? "Processing..." : "Record Deduction"}
           </button>

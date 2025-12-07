@@ -27,7 +27,6 @@ describe("Journey Token Resolvers", () => {
       save: jest.fn().mockResolvedValue(true),
       joinTokenJti: null,
       joinTokenExpiresAt: null,
-      joinTokenUsed: false,
     };
     (Journey.findById as jest.Mock).mockResolvedValue(mockJourneyInstance);
     (jwt.sign as jest.Mock).mockReturnValue("mock-join-token");
@@ -38,7 +37,6 @@ describe("Journey Token Resolvers", () => {
     // ensure we attempt to persist joinTokenJti/expires
     expect(mockJourneyInstance.joinTokenJti).toBeTruthy();
     expect(mockJourneyInstance.joinTokenExpiresAt).toBeTruthy();
-    expect(mockJourneyInstance.joinTokenUsed).toBe(false);
     expect(jwt.sign).toHaveBeenCalledWith(
       expect.objectContaining({
         journeyId: mockJourneyId,
@@ -51,7 +49,7 @@ describe("Journey Token Resolvers", () => {
     expect(token).toBe("mock-join-token");
   });
 
-  it("should atomically mark token used and allow join via token for guest", async () => {
+  it("should allow join via token for guest", async () => {
     const mockJourneyId = "journey-321";
     const mockJti = "fixed-jti";
     const mockToken = "dummy-token";
@@ -62,15 +60,17 @@ describe("Journey Token Resolvers", () => {
       jti: mockJti,
     }));
 
-    // findOneAndUpdate returns a truthy object when token verification passes
-    (Journey.findOneAndUpdate as unknown as jest.Mock).mockResolvedValue({
-      _id: mockJourneyId,
-    });
     const mockJourneyInstance: any = {
       _id: mockJourneyId,
       members: [],
+      rejectedMembers: [],
+      pendingMembers: [],
+      isLocked: false,
       save: jest.fn().mockResolvedValue(true),
     };
+
+    // Mock findOne to return the journey (valid token)
+    (Journey.findOne as jest.Mock).mockResolvedValue(mockJourneyInstance);
     (Journey.findById as jest.Mock).mockResolvedValue(mockJourneyInstance);
 
     // Mock User creation
@@ -83,6 +83,8 @@ describe("Journey Token Resolvers", () => {
     };
     // New User should be created if not authenticated
     (User as unknown as jest.Mock).mockImplementation(() => mockUserInstance);
+    // Mock User.find for name uniqueness check
+    (User.find as jest.Mock).mockResolvedValue([]);
 
     // Mock jwt.sign for auth token returned to client
     (jwt.sign as jest.Mock).mockReturnValue("auth-jwt-token");
@@ -92,12 +94,14 @@ describe("Journey Token Resolvers", () => {
       { token: mockToken, name: "Guest" },
       {}
     );
-    expect(Journey.findOneAndUpdate).toHaveBeenCalledWith(
-      expect.objectContaining({ _id: mockJourneyId, joinTokenJti: mockJti }),
+
+    expect(Journey.findOne).toHaveBeenCalledWith(
       expect.objectContaining({
-        $set: expect.objectContaining({ joinTokenUsed: true }),
+        _id: mockJourneyId,
+        joinTokenJti: mockJti,
       })
     );
+
     // guest user created
     expect(User).toHaveBeenCalled();
     // journey members updated and saved
@@ -116,15 +120,17 @@ describe("Journey Token Resolvers", () => {
       throw new Error("Invalid token");
     });
 
-    // Simulate findOneAndUpdate matching by joinTokenJti
-    (Journey.findOneAndUpdate as unknown as jest.Mock).mockResolvedValue({
-      _id: mockJourneyId,
-    });
     const mockJourneyInstance: any = {
       _id: mockJourneyId,
       members: [],
+      rejectedMembers: [],
+      pendingMembers: [],
+      isLocked: false,
       save: jest.fn().mockResolvedValue(true),
     };
+
+    // Mock findOne to return the journey (valid jti)
+    (Journey.findOne as jest.Mock).mockResolvedValue(mockJourneyInstance);
     (Journey.findById as jest.Mock).mockResolvedValue(mockJourneyInstance);
 
     // Mock User creation
@@ -136,6 +142,7 @@ describe("Journey Token Resolvers", () => {
       toObject: jest.fn().mockReturnValue({ name: "GuestJti" }),
     };
     (User as unknown as jest.Mock).mockImplementation(() => mockUserInstance);
+    (User.find as jest.Mock).mockResolvedValue([]);
     (jwt.sign as jest.Mock).mockReturnValue("auth-jwt-token-jti");
 
     const result = await joinJourneyViaToken(
@@ -143,17 +150,17 @@ describe("Journey Token Resolvers", () => {
       { token: mockToken, name: "GuestJti" },
       {}
     );
-    expect(Journey.findOneAndUpdate).toHaveBeenCalledWith(
-      expect.objectContaining({ joinTokenJti: mockJti }),
+
+    expect(Journey.findOne).toHaveBeenCalledWith(
       expect.objectContaining({
-        $set: expect.objectContaining({ joinTokenUsed: true }),
+        joinTokenJti: mockJti,
       })
     );
     expect(mockJourneyInstance.save).toHaveBeenCalled();
     expect(result.token).toBe("auth-jwt-token-jti");
   });
 
-  it("should reject already-used token", async () => {
+  it("should reject expired or invalid token", async () => {
     const mockJourneyId = "journey-1234";
     const mockJti = "fixed-jti";
     const mockToken = "dummy-token";
@@ -163,12 +170,11 @@ describe("Journey Token Resolvers", () => {
       jti: mockJti,
     }));
 
-    // Simulate token already used by returning null
-    (Journey.findOneAndUpdate as unknown as jest.Mock).mockResolvedValue(null);
+    // Simulate token not found (expired or invalid)
+    (Journey.findOne as jest.Mock).mockResolvedValue(null);
 
     await expect(
       joinJourneyViaToken({}, { token: mockToken, name: "Guest" }, {})
-    ).rejects.toThrow("Invalid or used token");
-    expect(Journey.findOneAndUpdate).toHaveBeenCalled();
+    ).rejects.toThrow("Invalid or expired token");
   });
 });

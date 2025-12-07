@@ -7,6 +7,11 @@ export interface IJourney extends Document {
   endDate?: Date;
   leaderId: mongoose.Types.ObjectId;
   members: mongoose.Types.ObjectId[];
+  pendingMembers: mongoose.Types.ObjectId[];
+  rejectedMembers: mongoose.Types.ObjectId[];
+  password?: string;
+  requireApproval: boolean;
+  isLocked: boolean;
   status: "active" | "complete";
   createdAt: Date;
   expireAt?: Date;
@@ -24,6 +29,11 @@ const JourneySchema: Schema = new Schema(
     endDate: { type: Date },
     leaderId: { type: Schema.Types.ObjectId, ref: "User", required: true },
     members: [{ type: Schema.Types.ObjectId, ref: "User" }],
+    pendingMembers: [{ type: Schema.Types.ObjectId, ref: "User" }],
+    rejectedMembers: [{ type: Schema.Types.ObjectId, ref: "User" }],
+    password: { type: String },
+    requireApproval: { type: Boolean, default: false },
+    isLocked: { type: Boolean, default: false },
     status: { type: String, enum: ["active", "complete"], default: "active" },
     expireAt: { type: Date },
     // Token metadata - used for single-active token or revocation

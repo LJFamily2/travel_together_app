@@ -12,6 +12,9 @@ import AddExpenseForm from "../../components/AddExpenseForm";
 import ActivityFeed from "../../components/ActivityFeed";
 import MyTotalSpend from "../../components/MyTotalSpend";
 import SettleUpModal from "../../components/SettleUpModal";
+import JourneySettingsModal from "../../components/JourneySettingsModal";
+import PendingRequestsModal from "../../components/PendingRequestsModal";
+import MembersModal from "../../components/MembersModal";
 import { useSocket } from "../../../lib/hooks/useSocket";
 
 const GENERATE_JOIN_TOKEN = gql`
@@ -30,6 +33,14 @@ const GET_DASHBOARD_DATA = gql`
       leader {
         id
         name
+      }
+      hasPassword
+      requireApproval
+      isLocked
+      pendingMembers {
+        id
+        name
+        email
       }
       members {
         id
@@ -101,11 +112,19 @@ interface DashboardData {
     id: string;
     slug: string;
     name: string;
-    expireAt?: string;
+    expireAt: string | null;
     leader: {
       id: string;
       name: string;
     };
+    hasPassword: boolean;
+    requireApproval: boolean;
+    isLocked: boolean;
+    pendingMembers: {
+      id: string;
+      name: string;
+      email?: string;
+    }[];
     members: {
       id: string;
       name: string;
@@ -176,12 +195,32 @@ const LEAVE_JOURNEY = gql`
   }
 `;
 
+const REMOVE_MEMBER = gql`
+  mutation RemoveMember($journeyId: ID!, $memberId: ID!) {
+    removeMember(journeyId: $journeyId, memberId: $memberId) {
+      id
+      members {
+        id
+        name
+      }
+      pendingMembers {
+        id
+        name
+      }
+    }
+  }
+`;
+
 export default function JourneyDashboard() {
   const client = useApolloClient();
   const params = useParams();
   const router = useRouter();
   const { status } = useSession();
   const slug = params.slug as string;
+
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isPendingRequestsOpen, setIsPendingRequestsOpen] = useState(false);
+  const [isMembersModalOpen, setIsMembersModalOpen] = useState(false);
   const [isSettleModalOpen, setIsSettleModalOpen] = useState(false);
   const [isEndingSoon, setIsEndingSoon] = useState(false);
   const [isLeaving, setIsLeaving] = useState(false);
@@ -205,6 +244,8 @@ export default function JourneyDashboard() {
     { journeyId: string; leaderTimezoneOffsetMinutes?: number }
   >(LEAVE_JOURNEY);
 
+  const [removeMember] = useMutation(REMOVE_MEMBER);
+
   const journey = data?.getJourneyDetails;
   const journeyId = journey?.id;
 
@@ -212,6 +253,7 @@ export default function JourneyDashboard() {
     refetch();
   });
   const currentUser = data?.me;
+  const isLeader = journey?.leader?.id === currentUser?.id;
 
   useEffect(() => {
     if (journey?.expireAt) {
@@ -243,6 +285,84 @@ export default function JourneyDashboard() {
   if (!currentUser)
     return <div className="p-8">Please join the journey first.</div>;
 
+  const isMember = journey.members.some((m) => m.id === currentUser.id);
+  const isPending = journey.pendingMembers?.some(
+    (m) => m.id === currentUser.id
+  );
+
+  if (isPending) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 p-4">
+        <div className="bg-white p-8 rounded-3xl shadow-xl text-center max-w-md w-full">
+          <div className="w-16 h-16 bg-yellow-100 text-yellow-600 rounded-full flex items-center justify-center mx-auto mb-4">
+            <svg
+              className="w-8 h-8"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+              />
+            </svg>
+          </div>
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">
+            Request Pending
+          </h2>
+          <p className="text-gray-500 mb-8">
+            Your request to join this journey is awaiting approval from the
+            leader.
+          </p>
+          <button
+            onClick={() => router.push("/")}
+            className="w-full bg-gray-900 text-white py-3 rounded-xl font-semibold hover:bg-gray-800 transition-colors cursor-pointer"
+          >
+            Go Home
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isMember) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 p-4">
+        <div className="bg-white p-8 rounded-3xl shadow-xl text-center max-w-md w-full">
+          <div className="w-16 h-16 bg-red-100 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4">
+            <svg
+              className="w-8 h-8"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"
+              />
+            </svg>
+          </div>
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">
+            Access Denied
+          </h2>
+          <p className="text-gray-500 mb-8">
+            You are not a member of this journey.
+          </p>
+          <button
+            onClick={() => router.push("/")}
+            className="w-full bg-gray-900 text-white py-3 rounded-xl font-semibold hover:bg-gray-800 transition-colors cursor-pointer"
+          >
+            Go Home
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   const handleShowQr = async () => {
     if (!journeyId) return;
     try {
@@ -264,6 +384,19 @@ export default function JourneyDashboard() {
       setShowQr(true);
     } catch {
       toast.error("Failed to generate QR code");
+    }
+  };
+
+  const handleRemoveMember = async (memberId: string) => {
+    if (!journeyId) return;
+    try {
+      await removeMember({
+        variables: { journeyId, memberId },
+      });
+      toast.success("Member removed successfully");
+      refetch();
+    } catch (error: any) {
+      toast.error(error.message || "Failed to remove member");
     }
   };
 
@@ -340,12 +473,47 @@ export default function JourneyDashboard() {
                 </span>
                 <div className="flex items-center gap-2">
                   <button
-                    onClick={handleShowQr}
-                    className="bg-blue-100 text-blue-600 px-3 py-1 rounded-full text-sm hover:bg-blue-200 transition-colors flex items-center"
-                    title="Generate a single-use join token valid for 5 minutes"
-                    aria-label="Generate a single-use join token"
+                    onClick={
+                      journey.isLocked
+                        ? (e) => {
+                            e.preventDefault();
+                            toast.error(
+                              "Journey is locked. Unlock to invite new members."
+                            );
+                          }
+                        : handleShowQr
+                    }
+                    className={`${
+                      journey.isLocked
+                        ? "bg-gray-200 text-gray-500 cursor-not-allowed"
+                        : "bg-blue-100 text-blue-600 hover:bg-blue-200"
+                    } px-3 py-1 rounded-full text-sm transition-colors flex items-center gap-1 cursor-pointer`}
+                    title={
+                      journey.isLocked
+                        ? "Journey is locked. No new members can join."
+                        : "Generate a single-use join token valid for 5 minutes"
+                    }
+                    aria-label={
+                      journey.isLocked
+                        ? "Journey is locked"
+                        : "Generate a single-use join token"
+                    }
                   >
                     Share QR
+                    {journey.isLocked && (
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        viewBox="0 0 20 20"
+                        fill="currentColor"
+                        className="w-4 h-4"
+                      >
+                        <path
+                          fillRule="evenodd"
+                          d="M10 1a4.5 4.5 0 00-4.5 4.5V9H5a2 2 0 00-2 2v6a2 2 0 002 2h10a2 2 0 002-2v-6a2 2 0 00-2-2h-.5V5.5A4.5 4.5 0 0010 1zm3 8V5.5a3 3 0 10-6 0V9h6z"
+                          clipRule="evenodd"
+                        />
+                      </svg>
+                    )}
                   </button>
                   <span
                     className="text-gray-400"
@@ -369,11 +537,55 @@ export default function JourneyDashboard() {
                   </span>
                 </div>
               </div>
+
+              {/* Member List */}
+              <div
+                className="flex items-center mt-3 -space-x-2 overflow-hidden cursor-pointer hover:opacity-80 transition-opacity"
+                onClick={() => setIsMembersModalOpen(true)}
+                title="View all members"
+              >
+                {journey.members.slice(0, 10).map((member) => (
+                  <div
+                    key={member.id}
+                    className="h-8 w-8 rounded-full ring-2 ring-white bg-gray-100 flex items-center justify-center text-xs font-medium text-gray-600"
+                    title={member.name}
+                  >
+                    {member.name.charAt(0).toUpperCase()}
+                  </div>
+                ))}
+                {journey.members.length > 10 && (
+                  <div className="h-8 w-8 rounded-full ring-2 ring-white bg-gray-800 flex items-center justify-center text-xs font-medium text-white z-10">
+                    10+
+                  </div>
+                )}
+              </div>
             </div>
             <div className="flex gap-3">
+              {isLeader && (
+                <>
+                  <button
+                    onClick={() => setIsSettingsOpen(true)}
+                    className="bg-gray-100 text-gray-700 px-4 py-2.5 rounded-full font-medium hover:bg-gray-200 transition-colors shadow-sm cursor-pointer"
+                  >
+                    Settings
+                  </button>
+                  {journey.pendingMembers &&
+                    journey.pendingMembers.length > 0 && (
+                      <button
+                        onClick={() => setIsPendingRequestsOpen(true)}
+                        className="bg-yellow-100 text-yellow-700 px-4 py-2.5 rounded-full font-medium hover:bg-yellow-200 transition-colors shadow-sm flex items-center gap-2 cursor-pointer"
+                      >
+                        Requests
+                        <span className="bg-yellow-600 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+                          {journey.pendingMembers.length}
+                        </span>
+                      </button>
+                    )}
+                </>
+              )}
               <button
                 onClick={() => setIsSettleModalOpen(true)}
-                className="bg-green-600 text-white px-6 py-2.5 rounded-full font-medium hover:bg-green-700 transition-colors shadow-sm"
+                className="bg-green-600 text-white px-6 py-2.5 rounded-full font-medium hover:bg-green-700 transition-colors shadow-sm cursor-pointer"
               >
                 Settle Up
               </button>
@@ -388,7 +600,7 @@ export default function JourneyDashboard() {
                       </span>
                       <div className="flex gap-2">
                         <button
-                          className="bg-red-500 text-white px-3 py-1 rounded-lg text-xs"
+                          className="bg-red-500 text-white px-3 py-1 rounded-lg text-xs cursor-pointer"
                           onClick={() => {
                             toast.dismiss(t.id);
                             handleLeave();
@@ -397,7 +609,7 @@ export default function JourneyDashboard() {
                           Yes
                         </button>
                         <button
-                          className="bg-gray-200 px-3 py-1 rounded-lg text-xs"
+                          className="bg-gray-200 px-3 py-1 rounded-lg text-xs cursor-pointer"
                           onClick={() => toast.dismiss(t.id)}
                         >
                           No
@@ -473,12 +685,37 @@ export default function JourneyDashboard() {
         onClose={() => setIsSettleModalOpen(false)}
       />
 
+      <JourneySettingsModal
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+        journeyId={journey.id}
+        currentRequireApproval={journey.requireApproval}
+        currentIsLocked={journey.isLocked}
+        hasPassword={journey.hasPassword}
+      />
+
+      <PendingRequestsModal
+        isOpen={isPendingRequestsOpen}
+        onClose={() => setIsPendingRequestsOpen(false)}
+        journeyId={journey.id}
+        pendingMembers={journey.pendingMembers || []}
+      />
+
+      <MembersModal
+        isOpen={isMembersModalOpen}
+        onClose={() => setIsMembersModalOpen(false)}
+        members={journey.members}
+        isLeader={isLeader}
+        currentUserId={currentUser.id}
+        onRemoveMember={handleRemoveMember}
+      />
+
       {showQr && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl p-8 max-w-sm w-full text-center relative">
             <button
               onClick={() => setShowQr(false)}
-              className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"
+              className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 cursor-pointer"
             >
               <svg
                 className="w-6 h-6"

@@ -227,7 +227,7 @@ export default function ActivityFeed({
         <span className="font-medium text-sm">Delete this expense?</span>
         <div className="flex gap-2">
           <button
-            className="bg-red-500 text-white px-3 py-1 rounded-lg text-xs"
+            className="bg-red-500 text-white px-3 py-1 rounded-lg text-xs cursor-pointer"
             onClick={async () => {
               toast.dismiss(t.id);
               try {
@@ -244,7 +244,7 @@ export default function ActivityFeed({
             Yes
           </button>
           <button
-            className="bg-gray-200 px-3 py-1 rounded-lg text-xs"
+            className="bg-gray-200 px-3 py-1 rounded-lg text-xs cursor-pointer"
             onClick={() => toast.dismiss(t.id)}
           >
             No
@@ -318,13 +318,13 @@ export default function ActivityFeed({
                   <div className="flex flex-col gap-2 ml-2">
                     <button
                       onClick={() => startEdit(expense)}
-                      className="px-3 py-1 bg-gray-100 rounded-full hover:bg-gray-200 text-sm transition-colors"
+                      className="px-3 py-1 bg-gray-100 rounded-full hover:bg-gray-200 text-sm transition-colors cursor-pointer"
                     >
                       Edit
                     </button>
                     <button
                       onClick={() => handleDelete(expense.id)}
-                      className="px-3 py-1 bg-red-50 text-red-600 rounded-full hover:bg-red-100 text-sm transition-colors"
+                      className="px-3 py-1 bg-red-50 text-red-600 rounded-full hover:bg-red-100 text-sm transition-colors cursor-pointer"
                       disabled={deleting}
                     >
                       Delete
@@ -472,14 +472,14 @@ export default function ActivityFeed({
                 <button
                   type="button"
                   onClick={closeEdit}
-                  className="px-4 py-2 bg-gray-100 rounded-full hover:bg-gray-200 transition-colors"
+                  className="px-4 py-2 bg-gray-100 rounded-full hover:bg-gray-200 transition-colors cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={updating}
-                  className="px-4 py-2 bg-black text-white rounded-full hover:opacity-80 transition-opacity"
+                  className="px-4 py-2 bg-black text-white rounded-full hover:opacity-80 transition-opacity cursor-pointer"
                 >
                   {updating ? "Saving..." : "Save Changes"}
                 </button>

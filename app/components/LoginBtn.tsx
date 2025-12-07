@@ -23,7 +23,7 @@ export default function LoginBtn() {
             }
             signOut({ callbackUrl: "/" });
           }}
-          className="rounded-full bg-red-500 px-4 py-2 text-white hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="rounded-full bg-red-500 px-4 py-2 text-white hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
         >
           {isLoading ? "Signing out..." : "Sign out"}
         </button>
@@ -40,7 +40,7 @@ export default function LoginBtn() {
           setIsLoading(true);
           signIn("google", { callbackUrl: "/dashboard" });
         }}
-        className="rounded-full bg-blue-500 px-4 py-2 text-white hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
+        className="rounded-full bg-blue-500 px-4 py-2 text-white hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
       >
         {isLoading ? "Signing in..." : "Sign in with Google"}
       </button>

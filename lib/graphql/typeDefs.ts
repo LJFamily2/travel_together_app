@@ -13,9 +13,11 @@ const typeDefs = gql`
   }
 
   type AuthPayload {
-    token: String!
-    user: User!
+    token: String
+    user: User
     journeySlug: String
+    journeyId: String
+    isPending: Boolean
   }
 
   type User {
@@ -35,10 +37,14 @@ const typeDefs = gql`
     endDate: String
     leader: User!
     members: [User]!
+    pendingMembers: [User]
     status: String!
     createdAt: String!
     expireAt: String
     expenses: [Expense]
+    hasPassword: Boolean
+    requireApproval: Boolean
+    isLocked: Boolean
   }
 
   type Split {
@@ -101,7 +107,22 @@ const typeDefs = gql`
     ): User
     leaveJourney(journeyId: ID!, leaderTimezoneOffsetMinutes: Int): Journey
     generateJoinToken(journeyId: ID!): String
-    joinJourneyViaToken(token: String!, name: String): AuthPayload
+    joinJourneyViaToken(
+      token: String!
+      name: String
+      password: String
+    ): AuthPayload
+    setJourneyPassword(journeyId: ID!, password: String): Boolean
+    toggleApprovalRequirement(
+      journeyId: ID!
+      requireApproval: Boolean!
+    ): Journey
+    toggleJourneyLock(journeyId: ID!, isLocked: Boolean!): Journey
+    approveJoinRequest(journeyId: ID!, userId: ID!): Journey
+    rejectJoinRequest(journeyId: ID!, userId: ID!): Journey
+    approveAllJoinRequests(journeyId: ID!): Journey
+    rejectAllJoinRequests(journeyId: ID!): Journey
+    removeMember(journeyId: ID!, memberId: ID!): Journey
   }
 
   input SplitInput {

@@ -105,7 +105,7 @@ export default function StyledQRCode({
       <div ref={containerRef} role="img" aria-label="QR code to join journey" />
       <div className="flex gap-2 justify-center items-center mt-3">
         <button
-          className="bg-gray-100 text-gray-800 px-3 py-1 rounded-md text-xs hover:bg-gray-200"
+          className="bg-gray-100 text-gray-800 px-3 py-1 rounded-md text-xs hover:bg-gray-200 cursor-pointer"
           onClick={() => {
             navigator.clipboard?.writeText(value);
             toast.success("Join link copied to clipboard");
@@ -117,7 +117,7 @@ export default function StyledQRCode({
         </button>
 
         <button
-          className="bg-blue-600 text-white px-3 py-1 rounded-md text-xs hover:bg-blue-700 flex items-center"
+          className="bg-blue-600 text-white px-3 py-1 rounded-md text-xs hover:bg-blue-700 flex items-center cursor-pointer"
           onClick={() => download("png")}
           title="Download PNG"
           aria-label="Download PNG"

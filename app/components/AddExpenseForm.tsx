@@ -208,7 +208,7 @@ export default function AddExpenseForm({
               // Initialize with all selected so user can deselect
               setSelectedMemberIds(uniqueMembers.map((m) => m.id));
             }}
-            className="flex items-center gap-2 bg-black text-white px-4 py-2 rounded-full text-sm font-medium hover:opacity-80 transition-opacity"
+            className="flex items-center gap-2 bg-black text-white px-4 py-2 rounded-full text-sm font-medium hover:opacity-80 transition-opacity cursor-pointer"
           >
             All
             <span className="text-gray-300 font-bold">✕</span>
@@ -222,7 +222,7 @@ export default function AddExpenseForm({
                   setIsAllSelected(true);
                   setSelectedMemberIds([]);
                 }}
-                className="text-sm text-blue-600 hover:underline"
+                className="text-sm text-blue-600 hover:underline cursor-pointer"
               >
                 Reset to All
               </button>
@@ -250,7 +250,7 @@ export default function AddExpenseForm({
                     type="button"
                     onClick={() => toggleMemberSelection(member.id)}
                     className={`
-                      flex items-center justify-center px-3 py-1 rounded-full text-sm border transition-all
+                      flex items-center justify-center px-3 py-1 rounded-full text-sm border transition-all cursor-pointer
                       ${
                         isSelected
                           ? "bg-black text-white border-black shadow-sm"
@@ -291,7 +291,7 @@ export default function AddExpenseForm({
       <button
         type="submit"
         disabled={loading}
-        className="w-full bg-black text-white py-3 px-4 rounded-full font-medium hover:opacity-80 disabled:opacity-50 transition-opacity"
+        className="w-full bg-black text-white py-3 px-4 rounded-full font-medium hover:opacity-80 disabled:opacity-50 transition-opacity cursor-pointer"
       >
         {loading ? "Adding..." : "Add Expense"}
       </button>
