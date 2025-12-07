@@ -395,8 +395,8 @@ export default function JourneyDashboard() {
       });
       toast.success("Member removed successfully");
       refetch();
-    } catch (error: any) {
-      toast.error(error.message || "Failed to remove member");
+    } catch {
+      toast.error( "Failed to remove member");
     }
   };
 

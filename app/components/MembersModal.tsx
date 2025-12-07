@@ -26,6 +26,7 @@ export default function MembersModal({
   onRemoveMember,
 }: MembersModalProps) {
   const [searchQuery, setSearchQuery] = useState("");
+  const [confirmRemoveId, setConfirmRemoveId] = useState<string | null>(null);
 
   if (!isOpen) return null;
 
@@ -112,35 +113,48 @@ export default function MembersModal({
                     )}
                   </div>
                 </div>
-                {isLeader && member.id !== currentUserId && onRemoveMember && (
-                  <button
-                    onClick={() => {
-                      if (
-                        confirm(
-                          `Are you sure you want to remove ${member.name} from the journey?`
-                        )
-                      ) {
-                        onRemoveMember(member.id);
-                      }
-                    }}
-                    className="text-red-500 hover:bg-red-50 p-2 rounded-full transition-colors"
-                    title="Remove member"
-                  >
-                    <svg
-                      className="w-5 h-5"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
+                {isLeader &&
+                  member.id !== currentUserId &&
+                  onRemoveMember &&
+                  (confirmRemoveId === member.id ? (
+                    <div className="flex items-center gap-2 animate-in fade-in slide-in-from-right-4 duration-200">
+                      <button
+                        onClick={() => {
+                          onRemoveMember(member.id);
+                          setConfirmRemoveId(null);
+                        }}
+                        className="bg-red-500 text-white px-3 py-1.5 rounded-full text-xs font-bold hover:bg-red-600 transition-colors cursor-pointer"
+                      >
+                        Confirm
+                      </button>
+                      <button
+                        onClick={() => setConfirmRemoveId(null)}
+                        className="bg-gray-200 text-gray-600 px-3 py-1.5 rounded-full text-xs font-bold hover:bg-gray-300 transition-colors cursor-pointer"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => setConfirmRemoveId(member.id)}
+                      className="text-red-500 hover:bg-red-50 p-2 rounded-full transition-colors cursor-pointer"
+                      title="Remove member"
                     >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                      />
-                    </svg>
-                  </button>
-                )}
+                      <svg
+                        className="w-5 h-5"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                        />
+                      </svg>
+                    </button>
+                  ))}
               </li>
             ))
           )}
