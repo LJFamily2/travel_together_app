@@ -94,6 +94,13 @@ export default function ActivityFeed({
   const [description, setDescription] = useState("");
   const [payerId, setPayerId] = useState("");
   const [imageBase64, setImageBase64] = useState<string | null>(null);
+
+  // Split logic state
+  const [splitType, setSplitType] = useState<"equal" | "separate">("equal");
+  const [individualAmounts, setIndividualAmounts] = useState<
+    Record<string, string>
+  >({});
+
   const [isAllSelected, setIsAllSelected] = useState(true);
   const [selectedMemberIds, setSelectedMemberIds] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
@@ -132,12 +139,30 @@ export default function ActivityFeed({
 
     // Determine split state
     const splitUserIds = expense.splits.map((s) => s.user.id);
-    const allMembersInvolved = uniqueMembers.every((m) =>
-      splitUserIds.includes(m.id)
-    );
 
-    setIsAllSelected(allMembersInvolved);
-    setSelectedMemberIds(splitUserIds);
+    // Check if splits are equal
+    const baseAmounts = expense.splits.map((s) => s.baseAmount);
+    const allEqual =
+      baseAmounts.length > 0 &&
+      baseAmounts.every((val) => Math.abs(val - baseAmounts[0]) < 0.01);
+
+    if (allEqual) {
+      setSplitType("equal");
+      const allMembersInvolved = uniqueMembers.every((m) =>
+        splitUserIds.includes(m.id)
+      );
+      setIsAllSelected(allMembersInvolved);
+      setSelectedMemberIds(splitUserIds);
+      setIndividualAmounts({});
+    } else {
+      setSplitType("separate");
+      const amounts: Record<string, string> = {};
+      expense.splits.forEach((s) => {
+        amounts[s.user.id] = s.baseAmount.toString();
+      });
+      setIndividualAmounts(amounts);
+      setSelectedMemberIds(splitUserIds);
+    }
   };
 
   const closeEdit = () => {
@@ -148,6 +173,8 @@ export default function ActivityFeed({
     setImageBase64(null);
     setIsAllSelected(true);
     setSelectedMemberIds([]);
+    setSplitType("equal");
+    setIndividualAmounts({});
   };
 
   const handleImageChange = (e: ChangeEvent<HTMLInputElement>) => {
@@ -181,26 +208,63 @@ export default function ActivityFeed({
       return;
     }
 
-    let splitMembers = uniqueMembers;
-    if (!isAllSelected) {
-      splitMembers = uniqueMembers.filter((m) =>
-        selectedMemberIds.includes(m.id)
-      );
-    }
+    let splits: {
+      userId: string;
+      baseAmount: number;
+      deduction: number;
+      reason?: string;
+    }[] = [];
 
-    if (splitMembers.length === 0) {
-      toast.error(
-        "Please select at least one person to split the expense with."
-      );
-      return;
-    }
+    if (splitType === "equal") {
+      let splitMembers = uniqueMembers;
+      if (!isAllSelected) {
+        splitMembers = uniqueMembers.filter((m) =>
+          selectedMemberIds.includes(m.id)
+        );
+      }
 
-    const splitAmount = parsedAmount / splitMembers.length;
-    const splits = splitMembers.map((m) => ({
-      userId: m.id,
-      baseAmount: parseFloat(splitAmount.toFixed(2)),
-      deduction: 0, // Reset deduction on full edit for simplicity, or we could try to preserve it but it's complex
-    }));
+      if (splitMembers.length === 0) {
+        toast.error(
+          "Please select at least one person to split the expense with."
+        );
+        return;
+      }
+
+      const splitAmount = parsedAmount / splitMembers.length;
+      splits = splitMembers.map((m) => ({
+        userId: m.id,
+        baseAmount: splitAmount,
+        deduction: 0,
+      }));
+    } else {
+      // Separate logic
+      const totalInputAmount = Object.values(individualAmounts).reduce(
+        (sum, val) => sum + (parseFloat(val) || 0),
+        0
+      );
+
+      if (Math.abs(totalInputAmount - parsedAmount) > 0.01) {
+        toast.error(
+          `Total split amount (${totalInputAmount.toFixed(
+            2
+          )}) must equal expense amount (${parsedAmount.toFixed(2)})`
+        );
+        return;
+      }
+
+      splits = Object.entries(individualAmounts)
+        .map(([userId, val]) => ({
+          userId,
+          baseAmount: parseFloat(val) || 0,
+          deduction: 0,
+        }))
+        .filter((s) => s.baseAmount > 0);
+
+      if (splits.length === 0) {
+        toast.error("Please enter amounts for at least one person.");
+        return;
+      }
+    }
 
     try {
       await updateExpense({
@@ -343,148 +407,287 @@ export default function ActivityFeed({
       {/* Edit Modal */}
       {editingExpense && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
-          <div className="bg-white p-8 rounded-[34px] shadow-xl w-full max-w-md max-h-[90vh] overflow-y-auto">
-            <h2 className="text-xl font-bold mb-4">Edit Expense</h2>
-            <form onSubmit={handleSave} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium mb-1 text-gray-700">
-                  Description
-                </label>
-                <input
-                  className="w-full p-3 border border-gray-200 rounded-xl bg-gray-50 focus:bg-white transition-colors"
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1 text-gray-700">
-                  Amount
-                </label>
-                <input
-                  type="number"
-                  step="0.01"
-                  className="w-full p-3 border border-gray-200 rounded-xl bg-gray-50 focus:bg-white transition-colors"
-                  value={amount}
-                  onChange={(e) => setAmount(e.target.value)}
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1 text-gray-700">
-                  Paid By
-                </label>
-                <select
-                  className="w-full p-3 border border-gray-200 rounded-xl bg-gray-50 focus:bg-white transition-colors"
-                  value={payerId}
-                  onChange={(e) => setPayerId(e.target.value)}
-                >
-                  {uniqueMembers.map((member) => (
-                    <option key={member.id} value={member.id}>
-                      {member.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Split Logic */}
-              <div>
-                <label className="block text-sm font-medium mb-2 text-gray-700">
-                  Split With
-                </label>
-                <div className="flex gap-4 mb-2">
-                  <label className="flex items-center">
-                    <input
-                      type="radio"
-                      checked={isAllSelected}
-                      onChange={() => setIsAllSelected(true)}
-                      className="mr-2"
-                    />
-                    Everyone
+          <div className="bg-white rounded-[34px] shadow-xl w-full max-w-md max-h-[90vh] flex flex-col overflow-hidden">
+            <div className="p-6 border-b border-gray-100">
+              <h2 className="text-xl font-bold">Edit Expense</h2>
+            </div>
+            <div className="flex-1 overflow-y-auto p-6 modal-scroll-area">
+              <form
+                id="edit-expense-form"
+                onSubmit={handleSave}
+                className="space-y-4"
+              >
+                <div>
+                  <label className="block text-sm font-medium mb-1 text-gray-700">
+                    Description
                   </label>
-                  <label className="flex items-center">
-                    <input
-                      type="radio"
-                      checked={!isAllSelected}
-                      onChange={() => setIsAllSelected(false)}
-                      className="mr-2"
-                    />
-                    Select Members
+                  <input
+                    className="w-full p-3 border border-gray-200 rounded-xl bg-gray-50 focus:bg-white transition-colors"
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1 text-gray-700">
+                    Amount
                   </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    className="w-full p-3 border border-gray-200 rounded-xl bg-gray-50 focus:bg-white transition-colors"
+                    value={amount}
+                    onChange={(e) => setAmount(e.target.value)}
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1 text-gray-700">
+                    Paid By
+                  </label>
+                  <select
+                    className="w-full p-3 border border-gray-200 rounded-xl bg-gray-50 focus:bg-white transition-colors"
+                    value={payerId}
+                    onChange={(e) => setPayerId(e.target.value)}
+                  >
+                    {uniqueMembers.map((member) => (
+                      <option key={member.id} value={member.id}>
+                        {member.name}
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
-                {!isAllSelected && (
-                  <div className="border border-gray-200 p-2 rounded-xl max-h-40 overflow-y-auto">
-                    <input
-                      type="text"
-                      placeholder="Search members..."
-                      className="w-full p-2 mb-2 border border-gray-200 rounded-lg text-sm bg-gray-50"
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                    />
-                    {uniqueMembers
-                      .filter((m) =>
-                        m.name.toLowerCase().includes(searchQuery.toLowerCase())
-                      )
-                      .map((member) => (
-                        <div key={member.id} className="flex items-center mb-1">
+                {/* Split Logic */}
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="block text-sm font-medium text-gray-700">
+                      Split With
+                    </label>
+                    <div className="flex bg-gray-100 rounded-lg p-1">
+                      <button
+                        type="button"
+                        onClick={() => setSplitType("equal")}
+                        className={`px-3 py-1 text-xs font-medium rounded-md transition-all ${
+                          splitType === "equal"
+                            ? "bg-white text-black shadow-sm"
+                            : "text-gray-500 hover:text-gray-700"
+                        }`}
+                      >
+                        Equally
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSplitType("separate")}
+                        className={`px-3 py-1 text-xs font-medium rounded-md transition-all ${
+                          splitType === "separate"
+                            ? "bg-white text-black shadow-sm"
+                            : "text-gray-500 hover:text-gray-700"
+                        }`}
+                      >
+                        Separate
+                      </button>
+                    </div>
+                  </div>
+
+                  {splitType === "equal" ? (
+                    <>
+                      <div className="flex gap-4 mb-2">
+                        <label className="flex items-center">
                           <input
-                            type="checkbox"
-                            checked={selectedMemberIds.includes(member.id)}
-                            onChange={() => toggleMemberSelection(member.id)}
+                            type="radio"
+                            checked={isAllSelected}
+                            onChange={() => setIsAllSelected(true)}
                             className="mr-2"
                           />
-                          <span>{member.name}</span>
+                          Everyone
+                        </label>
+                        <label className="flex items-center">
+                          <input
+                            type="radio"
+                            checked={!isAllSelected}
+                            onChange={() => setIsAllSelected(false)}
+                            className="mr-2"
+                          />
+                          Select Members
+                        </label>
+                      </div>
+
+                      {!isAllSelected && (
+                        <div className="border border-gray-200 p-2 rounded-xl max-h-40 overflow-y-auto">
+                          <input
+                            type="text"
+                            placeholder="Search members..."
+                            className="w-full p-2 mb-2 border border-gray-200 rounded-lg text-sm bg-gray-50"
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                          />
+                          {uniqueMembers
+                            .filter((m) =>
+                              m.name
+                                .toLowerCase()
+                                .includes(searchQuery.toLowerCase())
+                            )
+                            .map((member) => (
+                              <div
+                                key={member.id}
+                                className="flex items-center mb-1"
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={selectedMemberIds.includes(
+                                    member.id
+                                  )}
+                                  onChange={() =>
+                                    toggleMemberSelection(member.id)
+                                  }
+                                  className="mr-2"
+                                />
+                                <span>{member.name}</span>
+                              </div>
+                            ))}
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <div className="space-y-2">
+                      {uniqueMembers.map((member) => (
+                        <div
+                          key={member.id}
+                          className="flex items-center justify-between p-2 border border-gray-100 rounded-lg bg-gray-50"
+                        >
+                          <span className="text-sm font-medium text-gray-700">
+                            {member.name}
+                          </span>
+                          <input
+                            type="number"
+                            placeholder="0.00"
+                            step="0.01"
+                            value={individualAmounts[member.id] || ""}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              const numVal = parseFloat(val);
+                              const total = parseFloat(amount);
+                              if (
+                                !isNaN(total) &&
+                                !isNaN(numVal) &&
+                                numVal > total
+                              ) {
+                                toast.error(
+                                  "Individual amount cannot exceed total amount"
+                                );
+                                return;
+                              }
+                              setIndividualAmounts((prev) => ({
+                                ...prev,
+                                [member.id]: val,
+                              }));
+                            }}
+                            className="w-24 p-2 text-sm border border-gray-200 rounded-lg focus:bg-white transition-colors text-right"
+                          />
                         </div>
                       ))}
-                  </div>
-                )}
-              </div>
+                      <div className="flex flex-col items-end pt-2 border-t border-gray-100">
+                        <div className="text-sm mb-1">
+                          <span className="text-gray-500 mr-2">Total:</span>
+                          <span
+                            className={`font-bold ${
+                              Math.abs(
+                                Object.values(individualAmounts).reduce(
+                                  (sum, val) => sum + (parseFloat(val) || 0),
+                                  0
+                                ) - parseFloat(amount || "0")
+                              ) < 0.01
+                                ? "text-green-600"
+                                : "text-red-500"
+                            }`}
+                          >
+                            {Object.values(individualAmounts)
+                              .reduce(
+                                (sum, val) => sum + (parseFloat(val) || 0),
+                                0
+                              )
+                              .toFixed(2)}
+                          </span>
+                          <span className="text-gray-400 mx-1">/</span>
+                          <span className="text-gray-700">
+                            {parseFloat(amount || "0").toFixed(2)}
+                          </span>
+                        </div>
+                        <div className="text-xs">
+                          <span className="text-gray-500 mr-2">Remaining:</span>
+                          <span
+                            className={
+                              Math.abs(
+                                parseFloat(amount || "0") -
+                                  Object.values(individualAmounts).reduce(
+                                    (sum, val) => sum + (parseFloat(val) || 0),
+                                    0
+                                  )
+                              ) < 0.01
+                                ? "text-green-600 font-medium"
+                                : "text-red-500 font-bold"
+                            }
+                          >
+                            {(
+                              parseFloat(amount || "0") -
+                              Object.values(individualAmounts).reduce(
+                                (sum, val) => sum + (parseFloat(val) || 0),
+                                0
+                              )
+                            ).toFixed(2)}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
 
-              <div>
-                <label className="block text-sm font-medium mb-1 text-gray-700">
-                  Receipt Image (Optional)
-                </label>
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={handleImageChange}
-                  className="w-full text-sm"
-                />
-                {imageBase64 && (
-                  <div className="mt-2 relative h-20 w-20">
-                    <Image
-                      src={imageBase64}
-                      alt="Preview"
-                      fill
-                      className="object-cover rounded-xl"
-                    />
-                  </div>
-                )}
-                {!imageBase64 && editingExpense.hasImage && (
-                  <p className="text-xs text-gray-500 mt-1">
-                    Current image will be kept if no new image is selected.
-                  </p>
-                )}
-              </div>
-
-              <div className="flex justify-end gap-2 mt-6">
-                <button
-                  type="button"
-                  onClick={closeEdit}
-                  className="px-4 py-2 bg-gray-100 rounded-full hover:bg-gray-200 transition-colors cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={updating}
-                  className="px-4 py-2 bg-black text-white rounded-full hover:opacity-80 transition-opacity cursor-pointer"
-                >
-                  {updating ? "Saving..." : "Save Changes"}
-                </button>
-              </div>
-            </form>
+                <div>
+                  <label className="block text-sm font-medium mb-1 text-gray-700">
+                    Receipt Image (Optional)
+                  </label>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleImageChange}
+                    className="w-full text-sm"
+                  />
+                  {imageBase64 && (
+                    <div className="mt-2 relative h-20 w-20">
+                      <Image
+                        src={imageBase64}
+                        alt="Preview"
+                        fill
+                        className="object-cover rounded-xl"
+                      />
+                    </div>
+                  )}
+                  {!imageBase64 && editingExpense.hasImage && (
+                    <p className="text-xs text-gray-500 mt-1">
+                      Current image will be kept if no new image is selected.
+                    </p>
+                  )}
+                </div>
+              </form>
+            </div>
+            <div className="p-6 border-t border-gray-100 bg-gray-50 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={closeEdit}
+                className="px-4 py-2 bg-gray-100 rounded-full hover:bg-gray-200 transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                form="edit-expense-form"
+                disabled={updating}
+                className="px-4 py-2 bg-black text-white rounded-full hover:opacity-80 transition-opacity cursor-pointer"
+              >
+                {updating ? "Saving..." : "Save Changes"}
+              </button>
+            </div>
           </div>
         </div>
       )}

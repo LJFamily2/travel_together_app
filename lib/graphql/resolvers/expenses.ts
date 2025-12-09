@@ -36,6 +36,16 @@ const expenseResolvers = {
       // Logic check: (Split Amount) - (Deduction) = Final Owed is handled in UI or calculation,
       // here we just store the data.
 
+      // Validate total amount matches splits
+      const sumSplits = splits.reduce((acc, s) => acc + s.baseAmount, 0);
+      if (Math.abs(sumSplits - totalAmount) > 0.01) {
+        throw new Error(
+          `The sum of splits (${sumSplits.toFixed(
+            2
+          )}) must equal the total amount (${totalAmount.toFixed(2)})`
+        );
+      }
+
       let imageBuffer;
       if (imageBase64) {
         // Remove data:image/jpeg;base64, prefix if present

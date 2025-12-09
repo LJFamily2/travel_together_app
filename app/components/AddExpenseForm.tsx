@@ -53,6 +53,11 @@ export default function AddExpenseForm({
   const [payerId, setPayerId] = useState(currentUser.id);
 
   // Split logic state
+  const [splitType, setSplitType] = useState<"equal" | "separate">("equal");
+  const [individualAmounts, setIndividualAmounts] = useState<
+    Record<string, string>
+  >({});
+
   const [isAllSelected, setIsAllSelected] = useState(true);
   const [selectedMemberIds, setSelectedMemberIds] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
@@ -85,33 +90,82 @@ export default function AddExpenseForm({
     });
   };
 
+  const handleIndividualAmountChange = (memberId: string, value: string) => {
+    const numValue = parseFloat(value);
+    const total = parseFloat(amount);
+
+    if (!isNaN(total) && !isNaN(numValue) && numValue > total) {
+      toast.error("Individual amount cannot exceed total amount");
+      return;
+    }
+    setIndividualAmounts((prev) => ({ ...prev, [memberId]: value }));
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!amount || !description) return;
 
-    // Determine who is involved in the split
-    let splitMembers = uniqueMembers;
-    if (!isAllSelected) {
-      splitMembers = uniqueMembers.filter((m) =>
-        selectedMemberIds.includes(m.id)
-      );
-    }
+    let splits: {
+      userId: string;
+      baseAmount: number;
+      deduction: number;
+      reason: string;
+    }[] = [];
 
-    if (splitMembers.length === 0) {
-      toast.error(
-        "Please select at least one person to split the expense with."
-      );
-      return;
-    }
+    if (splitType === "equal") {
+      // Determine who is involved in the split
+      let splitMembers = uniqueMembers;
+      if (!isAllSelected) {
+        splitMembers = uniqueMembers.filter((m) =>
+          selectedMemberIds.includes(m.id)
+        );
+      }
 
-    // Simple equal split logic for now
-    const splitAmount = parseFloat(amount) / splitMembers.length;
-    const splits = splitMembers.map((m) => ({
-      userId: m.id,
-      baseAmount: splitAmount,
-      deduction: 0,
-      reason: "",
-    }));
+      if (splitMembers.length === 0) {
+        toast.error(
+          "Please select at least one person to split the expense with."
+        );
+        return;
+      }
+
+      // Simple equal split logic for now
+      const splitAmount = parseFloat(amount) / splitMembers.length;
+      splits = splitMembers.map((m) => ({
+        userId: m.id,
+        baseAmount: splitAmount,
+        deduction: 0,
+        reason: "",
+      }));
+    } else {
+      // Separate split logic
+      const totalInputAmount = Object.values(individualAmounts).reduce(
+        (sum, val) => sum + (parseFloat(val) || 0),
+        0
+      );
+
+      if (Math.abs(totalInputAmount - parseFloat(amount)) > 0.01) {
+        toast.error(
+          `Total split amount (${totalInputAmount.toFixed(
+            2
+          )}) must equal expense amount (${parseFloat(amount).toFixed(2)})`
+        );
+        return;
+      }
+
+      splits = Object.entries(individualAmounts)
+        .map(([userId, val]) => ({
+          userId,
+          baseAmount: parseFloat(val) || 0,
+          deduction: 0,
+          reason: "",
+        }))
+        .filter((s) => s.baseAmount > 0);
+
+      if (splits.length === 0) {
+        toast.error("Please enter amounts for at least one person.");
+        return;
+      }
+    }
 
     try {
       await addExpense({
@@ -130,6 +184,8 @@ export default function AddExpenseForm({
       setImageBase64(null);
       setIsAllSelected(true);
       setSelectedMemberIds([]);
+      setIndividualAmounts({});
+      setSplitType("equal");
       setPayerId(currentUser.id);
       toast.success("Expense added!");
     } catch (err) {
@@ -196,60 +252,88 @@ export default function AddExpenseForm({
       </div>
 
       <div className="mb-4">
-        <label className="block text-sm font-medium mb-2 text-gray-700">
-          Split With
-        </label>
+        <div className="flex items-center justify-between mb-2">
+          <label className="block text-sm font-medium text-gray-700">
+            Split With
+          </label>
+          <div className="flex bg-gray-100 rounded-lg p-1">
+            <button
+              type="button"
+              onClick={() => setSplitType("equal")}
+              className={`px-3 py-1 text-xs font-medium rounded-md transition-all ${
+                splitType === "equal"
+                  ? "bg-white text-black shadow-sm"
+                  : "text-gray-500 hover:text-gray-700"
+              }`}
+            >
+              Equally
+            </button>
+            <button
+              type="button"
+              onClick={() => setSplitType("separate")}
+              className={`px-3 py-1 text-xs font-medium rounded-md transition-all ${
+                splitType === "separate"
+                  ? "bg-white text-black shadow-sm"
+                  : "text-gray-500 hover:text-gray-700"
+              }`}
+            >
+              Separate
+            </button>
+          </div>
+        </div>
 
-        {isAllSelected ? (
-          <button
-            type="button"
-            onClick={() => {
-              setIsAllSelected(false);
-              // Initialize with all selected so user can deselect
-              setSelectedMemberIds(uniqueMembers.map((m) => m.id));
-            }}
-            className="flex items-center gap-2 bg-black text-white px-4 py-2 rounded-full text-sm font-medium hover:opacity-80 transition-opacity cursor-pointer"
-          >
-            All
-            <span className="text-gray-300 font-bold">✕</span>
-          </button>
-        ) : (
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
+        {splitType === "equal" ? (
+          <>
+            {isAllSelected ? (
               <button
                 type="button"
                 onClick={() => {
-                  setIsAllSelected(true);
-                  setSelectedMemberIds([]);
+                  setIsAllSelected(false);
+                  // Initialize with all selected so user can deselect
+                  setSelectedMemberIds(uniqueMembers.map((m) => m.id));
                 }}
-                className="text-sm text-blue-600 hover:underline cursor-pointer"
+                className="flex items-center gap-2 bg-black text-white px-4 py-2 rounded-full text-sm font-medium hover:opacity-80 transition-opacity cursor-pointer"
               >
-                Reset to All
+                All
+                <span className="text-gray-300 font-bold">✕</span>
               </button>
-              <span className="text-xs text-gray-500">
-                {selectedMemberIds.length} selected
-              </span>
-            </div>
-
-            {uniqueMembers.length > 10 && (
-              <input
-                type="text"
-                placeholder="Search users..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full p-2 text-sm border border-gray-200 rounded-xl bg-gray-50 mb-2"
-              />
-            )}
-
-            <div className="flex flex-wrap gap-2">
-              {filteredMembers.map((member) => {
-                const isSelected = selectedMemberIds.includes(member.id);
-                return (
+            ) : (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
                   <button
-                    key={member.id}
                     type="button"
-                    onClick={() => toggleMemberSelection(member.id)}
-                    className={`
+                    onClick={() => {
+                      setIsAllSelected(true);
+                      setSelectedMemberIds([]);
+                    }}
+                    className="text-sm text-blue-600 hover:underline cursor-pointer"
+                  >
+                    Reset to All
+                  </button>
+                  <span className="text-xs text-gray-500">
+                    {selectedMemberIds.length} selected
+                  </span>
+                </div>
+
+                {uniqueMembers.length > 10 && (
+                  <input
+                    type="text"
+                    placeholder="Search users..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full p-2 text-sm border border-gray-200 rounded-xl bg-gray-50 mb-2"
+                  />
+                )}
+
+                <div className="flex flex-wrap gap-2">
+                  {filteredMembers.map((member) => {
+                    const isSelected = selectedMemberIds.includes(member.id);
+                    return (
+                      <button
+                        key={member.id}
+                        type="button"
+                        onClick={() => toggleMemberSelection(member.id)}
+                        className={`
                       flex items-center justify-center px-3 py-1 rounded-full text-sm border transition-all cursor-pointer
                       ${
                         isSelected
@@ -257,11 +341,85 @@ export default function AddExpenseForm({
                           : "bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100"
                       }
                     `}
-                  >
-                    {member.name}
-                  </button>
-                );
-              })}
+                      >
+                        {member.name}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </>
+        ) : (
+          <div className="space-y-2">
+            {uniqueMembers.map((member) => (
+              <div
+                key={member.id}
+                className="flex items-center justify-between p-2 border border-gray-100 rounded-lg bg-gray-50"
+              >
+                <span className="text-sm font-medium text-gray-700">
+                  {member.name}
+                </span>
+                <input
+                  type="number"
+                  placeholder="0.00"
+                  step="0.01"
+                  value={individualAmounts[member.id] || ""}
+                  onChange={(e) =>
+                    handleIndividualAmountChange(member.id, e.target.value)
+                  }
+                  className="w-24 p-2 text-sm border border-gray-200 rounded-lg focus:bg-white transition-colors text-right"
+                />
+              </div>
+            ))}
+            <div className="flex flex-col items-end pt-2 border-t border-gray-100">
+              <div className="text-sm mb-1">
+                <span className="text-gray-500 mr-2">Total:</span>
+                <span
+                  className={`font-bold ${
+                    Math.abs(
+                      Object.values(individualAmounts).reduce(
+                        (sum, val) => sum + (parseFloat(val) || 0),
+                        0
+                      ) - parseFloat(amount || "0")
+                    ) < 0.01
+                      ? "text-green-600"
+                      : "text-red-500"
+                  }`}
+                >
+                  {Object.values(individualAmounts)
+                    .reduce((sum, val) => sum + (parseFloat(val) || 0), 0)
+                    .toFixed(2)}
+                </span>
+                <span className="text-gray-400 mx-1">/</span>
+                <span className="text-gray-700">
+                  {parseFloat(amount || "0").toFixed(2)}
+                </span>
+              </div>
+              <div className="text-xs">
+                <span className="text-gray-500 mr-2">Remaining:</span>
+                <span
+                  className={
+                    Math.abs(
+                      parseFloat(amount || "0") -
+                        Object.values(individualAmounts).reduce(
+                          (sum, val) => sum + (parseFloat(val) || 0),
+                          0
+                        )
+                    ) < 0.01
+                      ? "text-green-600 font-medium"
+                      : "text-red-500 font-bold"
+                  }
+                >
+                  {(
+                    parseFloat(amount || "0") -
+                    Object.values(individualAmounts).reduce(
+                      (sum, val) => sum + (parseFloat(val) || 0),
+                      0
+                    )
+                  ).toFixed(2)}
+                </span>
+              </div>
             </div>
           </div>
         )}
