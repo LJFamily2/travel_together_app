@@ -13,12 +13,14 @@ dotenv.config({ path: path.resolve(__dirname, "../.env") });
 const app = express();
 const server = http.createServer(app);
 const CLIENT_URL = process.env.CLIENT_URL || "http://localhost:3000";
-const SOCKET_SECRET = process.env.SOCKET_SECRET || "change_me_in_prod";
 
-const allowedOrigins = [
-  CLIENT_URL,
-  CLIENT_URL.replace("localhost", "127.0.0.1"),
-];
+const SOCKET_SECRET = process.env.SOCKET_SECRET;
+
+if (!process.env.SOCKET_SECRET) {
+  throw new Error("SOCKET_SECRET is not defined");
+}
+
+const allowedOrigins = [CLIENT_URL];
 
 const io = new Server(server, {
   cors: {

@@ -18,6 +18,8 @@ describe("Journey Token Resolvers", () => {
     jest.clearAllMocks();
     // Provide secret for jwt.sign in tests
     process.env.NEXTAUTH_SECRET = "test-secret";
+    process.env.JWT_SECRET = "test-secret";
+    process.env.SOCKET_SECRET = "test-secret";
   });
 
   it("should generate a join token and persist jti/expiry on journey", async () => {

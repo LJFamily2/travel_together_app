@@ -12,13 +12,34 @@ import { refreshJourneyExpiration } from "../../utils/expiration";
 
 const journeyResolvers = {
   Query: {
-    getJourneyDetails: async (_: unknown, { slug }: { slug: string }) => {
+    getJourneyDetails: async (
+      _: unknown,
+      { slug }: { slug: string },
+      context: { user?: { userId?: string } }
+    ) => {
       await dbConnect();
+      const userId = context?.user?.userId;
+
       const journey = await Journey.findOne({ slug })
         .populate("leaderId")
         .populate("members")
         .populate("pendingMembers");
       if (!journey) throw new Error("Journey not found");
+
+      // Check authorization
+      if (!userId) {
+        throw new Error("Unauthorized");
+      }
+
+      const isLeader =
+        (journey.leaderId as any)._id.toString() === userId.toString();
+      const isMember = journey.members.some(
+        (m: any) => m._id.toString() === userId.toString()
+      );
+
+      if (!isLeader && !isMember) {
+        throw new Error("Unauthorized");
+      }
 
       const journeyObj = journey.toObject();
       return {
@@ -367,9 +388,12 @@ const journeyResolvers = {
         }
 
         // Generate token for pending user so they have an identity
+        if (!process.env.JWT_SECRET) {
+          throw new Error("JWT_SECRET is not defined");
+        }
         const authToken = jwt.sign(
           { userId: user._id, email: user.email },
-          process.env.JWT_SECRET || "fallback_secret",
+          process.env.JWT_SECRET,
           { expiresIn: "30d" }
         );
 
@@ -387,9 +411,12 @@ const journeyResolvers = {
       await journey.save();
       await notifyJourneyUpdate(journey._id.toString());
 
+      if (!process.env.JWT_SECRET) {
+        throw new Error("JWT_SECRET is not defined");
+      }
       const authToken = jwt.sign(
         { userId: user._id, email: user.email },
-        process.env.JWT_SECRET || "fallback_secret",
+        process.env.JWT_SECRET,
         { expiresIn: "30d" }
       );
 

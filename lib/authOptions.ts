@@ -31,9 +31,12 @@ export const authOptions: NextAuthOptions = {
         // Attach internal DB id to token
         (token as any).userId = dbUser._id.toString();
         // Create an application JWT so the Apollo GraphQL layer can authenticate with existing logic
+        if (!process.env.JWT_SECRET) {
+          throw new Error("JWT_SECRET is not defined");
+        }
         (token as any).appJwt = jwt.sign(
           { userId: token.userId },
-          process.env.JWT_SECRET || "fallback_secret",
+          process.env.JWT_SECRET,
           { expiresIn: "30d" }
         );
       }

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import dbConnect from "../../mongodb";
 import User from "../../models/User";
 import jwt from "jsonwebtoken";
@@ -46,6 +47,7 @@ const userResolvers = {
       }
 
       // Check if name is taken in this journey
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const isNameTaken = (journey.members as any[]).some(
         (member: { name: string }) =>
           member.name.toLowerCase() === name.toLowerCase()
@@ -66,9 +68,12 @@ const userResolvers = {
       });
 
       // 3. Generate Token
+      if (!process.env.JWT_SECRET) {
+        throw new Error("JWT_SECRET is not defined");
+      }
       const token = jwt.sign(
         { userId: newUser._id, isGuest: true, journeyId },
-        process.env.JWT_SECRET || "fallback_secret",
+        process.env.JWT_SECRET,
         { expiresIn: "30d" }
       );
 
@@ -85,9 +90,12 @@ const userResolvers = {
       const user = await User.findById(userId);
       if (!user) throw new Error("User not found");
 
+      if (!process.env.JWT_SECRET) {
+        throw new Error("JWT_SECRET is not defined");
+      }
       const token = jwt.sign(
         { userId: user._id, isGuest: user.isGuest, journeyId },
-        process.env.JWT_SECRET || "fallback_secret",
+        process.env.JWT_SECRET,
         { expiresIn: "30d" }
       );
 

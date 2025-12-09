@@ -58,6 +58,7 @@ describe("notifyJourneyUpdate", () => {
   });
 
   it("should log error if fetch fails", async () => {
+    process.env.SOCKET_SECRET = "test-secret";
     const consoleSpy = jest.spyOn(console, "warn").mockImplementation(() => {});
     mockFetch.mockResolvedValueOnce({
       ok: false,
