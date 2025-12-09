@@ -4,10 +4,6 @@ import { Server, Socket } from "socket.io";
 import dotenv from "dotenv";
 import path from "path";
 
-// Load environment variables
-// 1. Try to load from .env in the current directory first
-dotenv.config();
-// 2. Then try to load from the parent directory's .env file (does not overwrite existing variables)
 dotenv.config({ path: path.resolve(__dirname, "../.env") });
 
 const app = express();
