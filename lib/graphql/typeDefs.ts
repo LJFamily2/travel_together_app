@@ -65,6 +65,12 @@ const typeDefs = gql`
     hasImage: Boolean
   }
 
+  type GuestUserResponse {
+    user: User
+    inviteLink: String
+    token: String
+  }
+
   type Query {
     getJourneyDetails(slug: String!): Journey
     getUserJourneys: [Journey]
@@ -80,6 +86,9 @@ const typeDefs = gql`
       startDate: String
       endDate: String
     ): Journey
+    createGuestUser(journeyId: ID!, name: String!): GuestUserResponse
+    regenerateGuestInvite(journeyId: ID!, userId: ID!): GuestUserResponse
+    claimGuestUser(token: String!): AuthPayload
     joinJourney(journeyId: ID!, userId: ID!): Journey
     addExpense(
       journeyId: ID!

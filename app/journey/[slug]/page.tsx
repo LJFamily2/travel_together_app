@@ -45,6 +45,7 @@ const GET_DASHBOARD_DATA = gql`
       members {
         id
         name
+        isGuest
         bankInfo {
           bankInformation {
             name
@@ -396,7 +397,7 @@ export default function JourneyDashboard() {
       toast.success("Member removed successfully");
       refetch();
     } catch {
-      toast.error( "Failed to remove member");
+      toast.error("Failed to remove member");
     }
   };
 
@@ -708,6 +709,9 @@ export default function JourneyDashboard() {
         isLeader={isLeader}
         currentUserId={currentUser.id}
         onRemoveMember={handleRemoveMember}
+        journeyId={journey.id}
+        onRefresh={() => refetch()}
+        onRefresh={() => refetch()}
       />
 
       {showQr && (
