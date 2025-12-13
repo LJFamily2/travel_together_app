@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import mongoose from "mongoose";
 import jwt from "jsonwebtoken";
 import slugify from "slugify";
