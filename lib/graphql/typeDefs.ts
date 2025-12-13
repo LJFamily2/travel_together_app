@@ -88,7 +88,7 @@ const typeDefs = gql`
     ): Journey
     createGuestUser(journeyId: ID!, name: String!): GuestUserResponse
     regenerateGuestInvite(journeyId: ID!, userId: ID!): GuestUserResponse
-    claimGuestUser(token: String!): AuthPayload
+    claimGuestUser(token: String!, password: String): AuthPayload
     joinJourney(journeyId: ID!, userId: ID!): Journey
     addExpense(
       journeyId: ID!

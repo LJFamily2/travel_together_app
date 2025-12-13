@@ -1,15 +1,15 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useMutation } from "@apollo/client/react";
 import { gql } from "@apollo/client";
 import toast from "react-hot-toast";
 
 const CLAIM_GUEST_USER = gql`
-  mutation ClaimGuestUser($token: String!) {
-    claimGuestUser(token: $token) {
+  mutation ClaimGuestUser($token: String!, $password: String) {
+    claimGuestUser(token: $token, password: $password) {
       token
       user {
         id
@@ -21,24 +21,21 @@ const CLAIM_GUEST_USER = gql`
   }
 `;
 
-export default function GuestJoinPage() {
+function GuestJoinContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const token = searchParams.get("token");
-  const [status, setStatus] = useState<"verifying" | "success" | "error">(
-    "verifying"
-  );
+  const [status, setStatus] = useState<
+    "verifying" | "success" | "error" | "password_required"
+  >("verifying");
+  const [password, setPassword] = useState("");
 
-  const [claimGuestUser] = useMutation(CLAIM_GUEST_USER, {
+  const [claimGuestUser, { loading }] = useMutation(CLAIM_GUEST_USER, {
     onCompleted: (data: any) => {
       const { token, journeySlug } = data.claimGuestUser;
 
       // Store the token
       localStorage.setItem("guestToken", token);
-
-      // Force a reload of the Apollo client state or just redirect
-      // Since we are setting localStorage, the ApolloWrapper should pick it up on next request
-      // But we might need to ensure the auth header is set.
 
       toast.success("Welcome back!");
       setStatus("success");
@@ -47,6 +44,19 @@ export default function GuestJoinPage() {
       router.push(`/journey/${journeySlug}`);
     },
     onError: (error) => {
+      // Handle expected errors without logging to console.error
+      if (error.message === "PASSWORD_REQUIRED") {
+        setStatus("password_required");
+        toast.error("This journey requires a password");
+        return;
+      }
+
+      if (error.message === "INVALID_PASSWORD") {
+        setStatus("password_required");
+        toast.error("Incorrect password");
+        return;
+      }
+
       console.error("Error claiming guest profile:", error);
       setStatus("error");
       toast.error(error.message || "Failed to verify guest link");
@@ -60,9 +70,16 @@ export default function GuestJoinPage() {
       return;
     }
 
-    // Attempt to claim
+    // Attempt to claim without password first
     claimGuestUser({ variables: { token } });
-  }, [token, claimGuestUser]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token]); // Only run on mount/token change
+
+  const handlePasswordSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!token) return;
+    claimGuestUser({ variables: { token, password } });
+  };
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-4">
@@ -72,6 +89,49 @@ export default function GuestJoinPage() {
             <div className="w-16 h-16 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mx-auto"></div>
             <h1 className="text-2xl font-bold text-gray-900">Verifying...</h1>
             <p className="text-gray-500">Please wait while we log you in.</p>
+          </>
+        )}
+
+        {status === "password_required" && (
+          <>
+            <div className="w-16 h-16 bg-yellow-100 text-yellow-600 rounded-full flex items-center justify-center mx-auto">
+              <svg
+                className="w-8 h-8"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
+                />
+              </svg>
+            </div>
+            <h1 className="text-2xl font-bold text-gray-900">
+              Password Required
+            </h1>
+            <p className="text-gray-500">
+              Please enter the journey password to continue.
+            </p>
+            <form onSubmit={handlePasswordSubmit} className="space-y-4">
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Journey Password"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                autoFocus
+              />
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full px-6 py-2 bg-blue-600 text-white rounded-full font-medium hover:bg-blue-700 transition-colors disabled:opacity-50"
+              >
+                {loading ? "Verifying..." : "Join Journey"}
+              </button>
+            </form>
           </>
         )}
 
@@ -129,5 +189,13 @@ export default function GuestJoinPage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function GuestJoinPage() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <GuestJoinContent />
+    </Suspense>
   );
 }

@@ -13,7 +13,7 @@ export const useSocket = (
     // Initialize socket connection
     // Assuming the socket server is running on port 4000
     const socketUrl =
-      process.env.NEXT_PUBLIC_SOCKET_URL || "http://127.0.0.1:4000";
+      process.env.NEXT_PUBLIC_SOCKET_URL;
 
     socket = io(socketUrl);
 

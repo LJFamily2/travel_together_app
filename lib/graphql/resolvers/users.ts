@@ -4,6 +4,7 @@ import User from "../../models/User";
 import jwt from "jsonwebtoken";
 import mongoose from "mongoose";
 import Journey from "../../models/Journey";
+import bcrypt from "bcryptjs";
 
 const userResolvers = {
   Query: {
@@ -179,32 +180,48 @@ const userResolvers = {
         token,
       };
     },
-    claimGuestUser: async (_: unknown, { token }: { token: string }) => {
+    claimGuestUser: async (
+      _: unknown,
+      { token, password }: { token: string; password?: string }
+    ) => {
       await dbConnect();
       if (!process.env.JWT_SECRET) throw new Error("JWT_SECRET missing");
 
+      let decoded: any;
       try {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const decoded = jwt.verify(token, process.env.JWT_SECRET) as any;
-        if (!decoded.userId || !decoded.journeyId)
-          throw new Error("Invalid token");
-
-        const user = await User.findById(decoded.userId);
-        if (!user) throw new Error("User not found");
-
-        const journey = await Journey.findById(decoded.journeyId);
-        if (!journey) throw new Error("Journey not found");
-
-        return {
-          token,
-          user,
-          journeySlug: journey.slug,
-          journeyId: journey._id.toString(),
-          isPending: false,
-        };
+        decoded = jwt.verify(token, process.env.JWT_SECRET) as any;
       } catch (error) {
         throw new Error("Invalid or expired token");
       }
+
+      if (!decoded.userId || !decoded.journeyId)
+        throw new Error("Invalid token");
+
+      const user = await User.findById(decoded.userId);
+      if (!user) throw new Error("User not found");
+
+      const journey = await Journey.findById(decoded.journeyId);
+      if (!journey) throw new Error("Journey not found");
+
+      // Password check
+      if (journey.password) {
+        if (!password) {
+          throw new Error("PASSWORD_REQUIRED");
+        }
+        const isValid = await bcrypt.compare(password, journey.password);
+        if (!isValid) {
+          throw new Error("INVALID_PASSWORD");
+        }
+      }
+
+      return {
+        token,
+        user,
+        journeySlug: journey.slug,
+        journeyId: journey._id.toString(),
+        isPending: false,
+      };
     },
     login: async (
       _: unknown,

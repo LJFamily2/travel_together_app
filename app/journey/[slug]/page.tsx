@@ -711,7 +711,6 @@ export default function JourneyDashboard() {
         onRemoveMember={handleRemoveMember}
         journeyId={journey.id}
         onRefresh={() => refetch()}
-        onRefresh={() => refetch()}
       />
 
       {showQr && (
