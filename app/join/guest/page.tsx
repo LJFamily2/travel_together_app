@@ -6,6 +6,7 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { useMutation } from "@apollo/client/react";
 import { gql } from "@apollo/client";
 import toast from "react-hot-toast";
+import Cookies from "js-cookie";
 
 const CLAIM_GUEST_USER = gql`
   mutation ClaimGuestUser($token: String!, $password: String) {
@@ -35,7 +36,7 @@ function GuestJoinContent() {
       const { token, journeySlug } = data.claimGuestUser;
 
       // Store the token
-      localStorage.setItem("guestToken", token);
+      Cookies.set("guestToken", token, { expires: 30 });
 
       toast.success("Welcome back!");
       setStatus("success");

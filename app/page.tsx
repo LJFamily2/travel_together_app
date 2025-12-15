@@ -6,6 +6,7 @@ import { gql } from "@apollo/client";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import { signIn } from "next-auth/react";
+import Cookies from "js-cookie";
 // (Navbar/footer imports removed — not used on this page)
 
 const CREATE_JOURNEY = gql`
@@ -101,7 +102,7 @@ export default function Home() {
       });
 
       if (loginRes.data) {
-        localStorage.setItem("guestToken", loginRes.data.login.token);
+        Cookies.set("guestToken", loginRes.data.login.token, { expires: 30 });
         toast.success(`Journey Created! Redirecting...`);
         router.push(`/journey/${newSlug}`);
       }

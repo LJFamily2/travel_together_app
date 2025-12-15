@@ -1,7 +1,8 @@
 export const notifyJourneyUpdate = async (journeyId: string) => {
   // PRIORITIZE internal URL for server-to-server communication
   // This avoids issues where the VPS cannot resolve its own public domain
-  const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL;
+  const socketUrl =
+    process.env.NEXT_PUBLIC_SOCKET_URL || "http://127.0.0.1:4000";
 
   try {
     const socketSecret = process.env.SOCKET_SECRET;

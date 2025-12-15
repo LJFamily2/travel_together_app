@@ -10,6 +10,8 @@ import {
   SSRMultipartLink,
 } from "@apollo/experimental-nextjs-app-support/ssr";
 
+import Cookies from "js-cookie";
+
 function makeClient() {
   const httpLink = new HttpLink({
     uri:
@@ -20,7 +22,7 @@ function makeClient() {
 
   const authLink = setContext((_, { headers }) => {
     const token =
-      typeof window !== "undefined" ? localStorage.getItem("guestToken") : null;
+      typeof window !== "undefined" ? Cookies.get("guestToken") : null;
     return {
       headers: {
         ...headers,

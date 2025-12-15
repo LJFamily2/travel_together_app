@@ -7,6 +7,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import toast from "react-hot-toast";
 import { useSocket } from "../../lib/hooks/useSocket";
+import Cookies from "js-cookie";
 
 const JOIN_JOURNEY_VIA_TOKEN = gql`
   mutation JoinJourneyViaToken(
@@ -93,7 +94,7 @@ function JoinPageContent() {
       } = resp;
 
       if (authToken) {
-        localStorage.setItem("guestToken", authToken);
+        Cookies.set("guestToken", authToken, { expires: 30 });
       }
 
       if (pendingStatus) {

@@ -18,6 +18,7 @@ jest.mock("../lib/utils/notifySocket", () => ({
 }));
 jest.mock("../lib/utils/expiration", () => ({
   refreshJourneyExpiration: jest.fn(),
+  calculateJwtExpiration: jest.fn(() => 30 * 24 * 60 * 60),
 }));
 
 describe("Join Flow Security Tests", () => {

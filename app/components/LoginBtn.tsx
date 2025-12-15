@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useSession, signIn, signOut } from "next-auth/react";
+import Cookies from "js-cookie";
 
 export default function LoginBtn() {
   const { data: session } = useSession();
@@ -17,7 +18,7 @@ export default function LoginBtn() {
             if (isLoading) return;
             setIsLoading(true);
             try {
-              localStorage.removeItem("guestToken");
+              Cookies.remove("guestToken");
             } catch (e) {
               /* ignore */
             }

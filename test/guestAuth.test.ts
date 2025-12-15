@@ -71,7 +71,7 @@ describe("Guest Authentication Resolver", () => {
     expect(jwt.sign).toHaveBeenCalledWith(
       { userId: mockUserId, isGuest: true, journeyId: mockJourneyId },
       expect.any(String), // secret
-      { expiresIn: "30d" }
+      { expiresIn: expect.any(Number) }
     );
 
     // 4. Check Result

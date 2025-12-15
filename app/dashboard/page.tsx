@@ -6,6 +6,7 @@ import { useQuery, useMutation } from "@apollo/client/react";
 import { useRouter } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
 import toast from "react-hot-toast";
+import Cookies from "js-cookie";
 
 const GET_USER_JOURNEYS = gql`
   query GetUserJourneys {
@@ -119,7 +120,7 @@ export default function DashboardPage() {
             variables: { userId, journeyId: journeyToJoin },
           });
           const token = loginRes?.data?.login?.token;
-          if (token) localStorage.setItem("guestToken", token);
+          if (token) Cookies.set("guestToken", token, { expires: 30 });
         } catch {
           // ignore
         }
@@ -261,7 +262,7 @@ export default function DashboardPage() {
   React.useEffect(() => {
     // Check both localStorage token and session returned appJwt
     try {
-      const localToken = localStorage.getItem("guestToken");
+      const localToken = Cookies.get("guestToken");
       if (localToken) {
         setHasToken(true);
         return;
@@ -274,9 +275,10 @@ export default function DashboardPage() {
       (session.user as unknown as Record<string, string>).appJwt
     ) {
       try {
-        localStorage.setItem(
+        Cookies.set(
           "guestToken",
-          (session.user as unknown as Record<string, string>).appJwt
+          (session.user as unknown as Record<string, string>).appJwt,
+          { expires: 30 }
         );
       } catch {
         /* ignore */
@@ -305,7 +307,7 @@ export default function DashboardPage() {
                 if (isSigningOut) return;
                 setIsSigningOut(true);
                 try {
-                  localStorage.removeItem("guestToken");
+                  Cookies.remove("guestToken");
                 } catch {
                   /* ignore */
                 }

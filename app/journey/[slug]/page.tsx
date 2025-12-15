@@ -16,6 +16,7 @@ import JourneySettingsModal from "../../components/JourneySettingsModal";
 import PendingRequestsModal from "../../components/PendingRequestsModal";
 import MembersModal from "../../components/MembersModal";
 import { useSocket } from "../../../lib/hooks/useSocket";
+import Cookies from "js-cookie";
 
 const GENERATE_JOIN_TOKEN = gql`
   mutation GenerateJoinToken($journeyId: ID!) {
@@ -271,7 +272,7 @@ export default function JourneyDashboard() {
   useEffect(() => {
     // If no token and no active session, redirect to home
     if (typeof window !== "undefined") {
-      const token = localStorage.getItem("guestToken");
+      const token = Cookies.get("guestToken");
       if (!token && status !== "authenticated" && status !== "loading") {
         router.push("/");
       }
@@ -450,7 +451,7 @@ export default function JourneyDashboard() {
           console.warn("Could not write updated journey to cache:", cacheError);
         }
       }
-      localStorage.removeItem("guestToken");
+      Cookies.remove("guestToken");
       await client.clearStore();
       router.push("/");
     } catch (e) {

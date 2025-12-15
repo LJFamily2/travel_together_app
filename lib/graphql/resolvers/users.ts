@@ -5,6 +5,8 @@ import jwt from "jsonwebtoken";
 import mongoose from "mongoose";
 import Journey from "../../models/Journey";
 import bcrypt from "bcryptjs";
+import { notifyJourneyUpdate } from "../../utils/notifySocket";
+import { calculateJwtExpiration } from "../../utils/expiration";
 
 const userResolvers = {
   Query: {
@@ -72,10 +74,11 @@ const userResolvers = {
       if (!process.env.JWT_SECRET) {
         throw new Error("JWT_SECRET is not defined");
       }
+      const expiresIn = calculateJwtExpiration(journey);
       const token = jwt.sign(
         { userId: newUser._id, isGuest: true, journeyId },
         process.env.JWT_SECRET,
-        { expiresIn: "30d" }
+        { expiresIn }
       );
 
       return {
@@ -122,10 +125,11 @@ const userResolvers = {
       // Generate Token
       if (!process.env.JWT_SECRET) throw new Error("JWT_SECRET missing");
 
+      const expiresIn = calculateJwtExpiration(journey);
       const token = jwt.sign(
         { userId: newUser._id, isGuest: true, journeyId, type: "guest_invite" },
         process.env.JWT_SECRET,
-        { expiresIn: "365d" }
+        { expiresIn }
       );
 
       // We return a relative path, client can prepend origin
@@ -166,10 +170,11 @@ const userResolvers = {
       // Generate Token
       if (!process.env.JWT_SECRET) throw new Error("JWT_SECRET missing");
 
+      const expiresIn = calculateJwtExpiration(journey);
       const token = jwt.sign(
         { userId: user._id, isGuest: true, journeyId, type: "guest_invite" },
         process.env.JWT_SECRET,
-        { expiresIn: "365d" }
+        { expiresIn }
       );
 
       const inviteLink = `/join/guest?token=${token}`;
@@ -231,13 +236,17 @@ const userResolvers = {
       const user = await User.findById(userId);
       if (!user) throw new Error("User not found");
 
+      const journey = await Journey.findById(journeyId);
+      if (!journey) throw new Error("Journey not found");
+
       if (!process.env.JWT_SECRET) {
         throw new Error("JWT_SECRET is not defined");
       }
+      const expiresIn = calculateJwtExpiration(journey);
       const token = jwt.sign(
         { userId: user._id, isGuest: user.isGuest, journeyId },
         process.env.JWT_SECRET,
-        { expiresIn: "30d" }
+        { expiresIn }
       );
 
       return {

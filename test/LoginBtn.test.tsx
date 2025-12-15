@@ -6,9 +6,14 @@ import { render, screen, fireEvent } from "@testing-library/react";
 import LoginBtn from "../app/components/LoginBtn";
 import { useSession, signIn, signOut } from "next-auth/react";
 import "@testing-library/jest-dom";
+import Cookies from "js-cookie";
 
 // Mock next-auth/react
 jest.mock("next-auth/react");
+// Mock js-cookie
+jest.mock("js-cookie", () => ({
+  remove: jest.fn(),
+}));
 
 describe("LoginBtn Component", () => {
   beforeEach(() => {
@@ -52,6 +57,7 @@ describe("LoginBtn Component", () => {
 
     // Test click
     fireEvent.click(signOutButton);
+    expect(Cookies.remove).toHaveBeenCalledWith("guestToken");
     expect(signOut).toHaveBeenCalledWith({ callbackUrl: "/" });
   });
 });

@@ -62,3 +62,20 @@ export const refreshJourneyExpiration = async (
 
   return newExpireAt;
 };
+
+/**
+ * Calculates the JWT expiration time in seconds based on the journey's expiration date.
+ * @param journey The journey object
+ * @returns The expiration time in seconds
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export const calculateJwtExpiration = (journey: any): number => {
+  if (!journey.expireAt) {
+    return 30 * 24 * 60 * 60; // Default 30 days if no expireAt
+  }
+  const now = Date.now();
+  const expireTime = new Date(journey.expireAt).getTime();
+  const diffSeconds = Math.floor((expireTime - now) / 1000);
+
+  return diffSeconds > 0 ? diffSeconds : 0;
+};

@@ -9,7 +9,10 @@ import Journey, { IJourney } from "../../models/Journey";
 import Expense from "../../models/Expense";
 import User from "../../models/User";
 import { notifyJourneyUpdate } from "../../utils/notifySocket";
-import { refreshJourneyExpiration } from "../../utils/expiration";
+import {
+  refreshJourneyExpiration,
+  calculateJwtExpiration,
+} from "../../utils/expiration";
 
 const journeyResolvers = {
   Query: {
@@ -363,10 +366,11 @@ const journeyResolvers = {
 
       if (isMember) {
         // Already a member, just return auth
+        const expiresIn = calculateJwtExpiration(journey);
         const authToken = jwt.sign(
           { userId: user._id, email: user.email },
           process.env.JWT_SECRET || "fallback_secret",
-          { expiresIn: "30d" }
+          { expiresIn }
         );
         return {
           token: authToken,
@@ -392,10 +396,11 @@ const journeyResolvers = {
         if (!process.env.JWT_SECRET) {
           throw new Error("JWT_SECRET is not defined");
         }
+        const expiresIn = calculateJwtExpiration(journey);
         const authToken = jwt.sign(
           { userId: user._id, email: user.email },
           process.env.JWT_SECRET,
-          { expiresIn: "30d" }
+          { expiresIn }
         );
 
         return {
@@ -415,10 +420,11 @@ const journeyResolvers = {
       if (!process.env.JWT_SECRET) {
         throw new Error("JWT_SECRET is not defined");
       }
+      const expiresIn = calculateJwtExpiration(journey);
       const authToken = jwt.sign(
         { userId: user._id, email: user.email },
         process.env.JWT_SECRET,
-        { expiresIn: "30d" }
+        { expiresIn }
       );
 
       return {
