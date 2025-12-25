@@ -323,7 +323,7 @@ export default function SettleUpModal({
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 backdrop-blur-sm">
-      <div className="bg-white p-8 rounded-[34px] shadow-xl w-96 max-h-[90vh] overflow-y-auto">
+      <div className="bg-white p-6 sm:p-8 rounded-[28px] shadow-xl w-full max-w-lg mx-4 sm:mx-0 max-h-[90vh] overflow-y-auto">
         <div className="flex justify-between items-center mb-4">
           <h3 className="text-lg font-bold">Settle Up</h3>
           <button
@@ -411,7 +411,7 @@ export default function SettleUpModal({
                     </div>
 
                     {isExpanded && deductions.length > 0 && (
-                      <div className="p-3 bg-gray-100 text-xs border-t border-gray-200">
+                      <div className="p-3 sm:p-4 bg-gray-100 text-sm sm:text-xs border-t border-gray-200 rounded-b-lg">
                         <p className="font-semibold mb-1 text-gray-500">
                           Deduction History:
                         </p>
@@ -422,40 +422,51 @@ export default function SettleUpModal({
                             (d) => d.expenseId === editing.expenseId
                           ) && (
                             <div className="mb-2 p-2 bg-white rounded-lg border border-gray-200">
-                              <div className="flex gap-2 items-center mb-2">
-                                <input
-                                  type="number"
-                                  value={editing.amount}
-                                  onChange={(e) =>
-                                    setEditing(
-                                      (prev) =>
-                                        prev && {
-                                          ...prev,
-                                          amount: parseFloat(e.target.value),
-                                        }
-                                    )
-                                  }
-                                  className="w-28 p-1 border border-gray-200 rounded-lg text-sm"
-                                />
-                                <input
-                                  type="text"
-                                  value={editing.reason}
-                                  onChange={(e) =>
-                                    setEditing(
-                                      (prev) =>
-                                        prev && {
-                                          ...prev,
-                                          reason: e.target.value,
-                                        }
-                                    )
-                                  }
-                                  className="p-1 border border-gray-200 rounded-lg text-sm flex-1"
-                                />
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 items-stretch mb-2">
+                                <label className="flex flex-col text-xs">
+                                  <span className="text-gray-500 mb-1">
+                                    Amount
+                                  </span>
+                                  <input
+                                    type="number"
+                                    value={editing.amount}
+                                    onChange={(e) =>
+                                      setEditing(
+                                        (prev) =>
+                                          prev && {
+                                            ...prev,
+                                            amount: parseFloat(e.target.value),
+                                          }
+                                      )
+                                    }
+                                    className="w-full sm:w-48 p-1 border border-gray-200 rounded-lg text-sm text-right"
+                                  />
+                                </label>
+
+                                <label className="flex flex-col text-xs">
+                                  <span className="text-gray-500 mb-1">
+                                    Reason
+                                  </span>
+                                  <input
+                                    type="text"
+                                    value={editing.reason}
+                                    onChange={(e) =>
+                                      setEditing(
+                                        (prev) =>
+                                          prev && {
+                                            ...prev,
+                                            reason: e.target.value,
+                                          }
+                                      )
+                                    }
+                                    className="p-1 border border-gray-200 rounded-lg text-sm flex-1 min-w-0"
+                                  />
+                                </label>
                               </div>
-                              <div className="flex gap-2 justify-end">
+                              <div className="flex flex-col sm:flex-row gap-2 justify-end w-full">
                                 <button
                                   onClick={() => setEditing(null)}
-                                  className="px-2 py-1 bg-gray-200 rounded text-xs"
+                                  className="px-2 py-1 bg-gray-200 rounded text-xs cursor-pointer w-full sm:w-auto text-center"
                                 >
                                   Cancel
                                 </button>
@@ -486,13 +497,11 @@ export default function SettleUpModal({
 
                                       // compute new total
                                       const sumBase = splitsInput.reduce(
-                                        (acc, s) =>
-                                          acc + (s.baseAmount || 0),
+                                        (acc, s) => acc + (s.baseAmount || 0),
                                         0
                                       );
                                       const sumDeductions = splitsInput.reduce(
-                                        (acc, s) =>
-                                          acc + (s.deduction || 0),
+                                        (acc, s) => acc + (s.deduction || 0),
                                         0
                                       );
                                       const totalFromSplits =
@@ -517,7 +526,7 @@ export default function SettleUpModal({
                                       toast.error("Failed to update deduction");
                                     }
                                   }}
-                                  className="px-2 py-1 bg-blue-600 text-white rounded text-xs"
+                                  className="px-2 py-1 bg-blue-600 text-white rounded text-xs cursor-pointer w-full sm:w-auto text-center"
                                 >
                                   Save
                                 </button>
@@ -528,19 +537,19 @@ export default function SettleUpModal({
                         {deductions.map((d, idx) => (
                           <div
                             key={idx}
-                            className="flex justify-between items-center py-1 border-b border-gray-200 last:border-0"
+                            className="flex flex-col sm:flex-row justify-between items-start sm:items-center py-2 border-b border-gray-200 last:border-0"
                           >
-                            <div className="flex gap-3 items-center flex-1 min-w-0">
+                            <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center flex-1 min-w-0">
                               <span className="truncate text-sm">
                                 {d.reason}
                               </span>
-                              <span className="text-xs text-gray-400 flex-none ml-2">
+                              <span className="text-xs text-gray-400 flex-none mt-1 sm:mt-0 ml-0 sm:ml-2">
                                 {d.date}
                               </span>
                             </div>
 
-                            <div className="flex items-center gap-2 flex-none">
-                              <span className="font-mono whitespace-nowrap ml-2">
+                            <div className="flex items-center gap-2 flex-none mt-2 sm:mt-0">
+                              <span className="font-mono whitespace-nowrap">
                                 -${d.amount.toFixed(2)}
                               </span>
 
@@ -552,7 +561,7 @@ export default function SettleUpModal({
                                       toggleMenu(d.expenseId);
                                     }}
                                     aria-label="Open actions"
-                                    className="p-1 rounded hover:bg-gray-200 text-gray-600"
+                                    className="p-1 rounded hover:bg-gray-200 text-gray-600 cursor-pointer"
                                   >
                                     ⋯
                                   </button>
@@ -570,7 +579,7 @@ export default function SettleUpModal({
                                           });
                                           closeAllMenus();
                                         }}
-                                        className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50"
+                                        className="w-full text-left rounded px-3 py-2 text-sm hover:bg-gray-50 cursor-pointer"
                                       >
                                         Edit
                                       </button>
@@ -596,7 +605,7 @@ export default function SettleUpModal({
                                             );
                                           }
                                         }}
-                                        className="w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-gray-50"
+                                        className="w-full text-left px-3 py-2 rounded text-sm text-red-600 hover:bg-gray-50 cursor-pointer"
                                       >
                                         Remove
                                       </button>
@@ -634,9 +643,11 @@ export default function SettleUpModal({
           <select
             value={recipientId}
             onChange={(e) => setRecipientId(e.target.value)}
-            className="w-full p-2 border border-gray-200 rounded-lg bg-white"
+            className="w-full p-2 border border-gray-200 rounded-lg bg-white cursor-pointer"
           >
-            <option value="">Select a member</option>
+            <option className="cursor-pointer" value="">
+              Select a member
+            </option>
             {members
               .filter((m) => m.id !== currentUser.id)
               // Filter: Only show members who owe ME money
@@ -647,7 +658,7 @@ export default function SettleUpModal({
                   index === self.findIndex((t) => t.name === m.name)
               )
               .map((m) => (
-                <option key={m.id} value={m.id}>
+                <option key={m.id} value={m.id} className="cursor-pointer">
                   {m.name} (Owes: ${(balances[m.id] || 0).toFixed(2)})
                 </option>
               ))}
