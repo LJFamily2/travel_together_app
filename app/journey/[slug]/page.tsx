@@ -15,6 +15,8 @@ import SettleUpModal from "../../components/SettleUpModal";
 import JourneySettingsModal from "../../components/JourneySettingsModal";
 import PendingRequestsModal from "../../components/PendingRequestsModal";
 import MembersModal from "../../components/MembersModal";
+import UserSettingsModal from "../../components/UserSettingsModal";
+import { CurrencyProvider } from "../../context/CurrencyContext";
 import { useSocket } from "../../../lib/hooks/useSocket";
 import Cookies from "js-cookie";
 
@@ -223,6 +225,7 @@ export default function JourneyDashboard() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isPendingRequestsOpen, setIsPendingRequestsOpen] = useState(false);
   const [isMembersModalOpen, setIsMembersModalOpen] = useState(false);
+  const [isUserSettingsOpen, setIsUserSettingsOpen] = useState(false);
   const [isSettleModalOpen, setIsSettleModalOpen] = useState(false);
   const [isEndingSoon, setIsEndingSoon] = useState(false);
   const [isLeaving, setIsLeaving] = useState(false);
@@ -461,331 +464,358 @@ export default function JourneyDashboard() {
   };
 
   return (
-    <div className="min-h-screen bg-(--color-background) text-(--color-foreground) font-sans flex flex-col">
-      <main className="grow w-full max-w-[1440px] mx-auto p-4 md:p-8">
-        <div className="bg-white rounded-[34px] p-6 md:p-10 shadow-sm min-h-[80vh]">
-          <header className="mb-8 flex justify-between items-center flex-wrap gap-4 border-b border-gray-100 pb-6">
-            <div>
-              <h1 className="text-4xl font-bold mb-2 text-gray-900">
-                {journey.name}
-              </h1>
-              <div className="flex items-center gap-2 text-gray-500">
-                <span className="bg-gray-100 px-3 py-1 rounded-full text-sm">
-                  Leader: {journey.leader.name}
-                </span>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={
-                      journey.isLocked
-                        ? (e) => {
-                            e.preventDefault();
-                            toast.error(
-                              "Journey is locked. Unlock to invite new members."
-                            );
-                          }
-                        : handleShowQr
-                    }
-                    className={`${
-                      journey.isLocked
-                        ? "bg-gray-200 text-gray-500 cursor-not-allowed"
-                        : "bg-blue-100 text-blue-600 hover:bg-blue-200"
-                    } px-3 py-1 rounded-full text-sm transition-colors flex items-center gap-1 cursor-pointer`}
-                    title={
-                      journey.isLocked
-                        ? "Journey is locked. No new members can join."
-                        : "Generate a single-use join token valid for 5 minutes"
-                    }
-                    aria-label={
-                      journey.isLocked
-                        ? "Journey is locked"
-                        : "Generate a single-use join token"
-                    }
-                  >
-                    Share QR
-                    {journey.isLocked && (
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        viewBox="0 0 20 20"
-                        fill="currentColor"
-                        className="w-4 h-4"
-                      >
-                        <path
-                          fillRule="evenodd"
-                          d="M10 1a4.5 4.5 0 00-4.5 4.5V9H5a2 2 0 00-2 2v6a2 2 0 002 2h10a2 2 0 002-2v-6a2 2 0 00-2-2h-.5V5.5A4.5 4.5 0 0010 1zm3 8V5.5a3 3 0 10-6 0V9h6z"
-                          clipRule="evenodd"
-                        />
-                      </svg>
-                    )}
-                  </button>
-                  <span
-                    className="text-gray-400"
-                    title="Tokens are single-use; generating a new QR invalidates previous tokens. Token expires in 5 minutes."
-                    aria-hidden
-                  >
-                    <svg
-                      className="w-4 h-4"
-                      xmlns="http://www.w3.org/2000/svg"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth={2}
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    >
-                      <circle cx="12" cy="12" r="10" />
-                      <line x1="12" y1="8" x2="12" y2="12" />
-                      <line x1="12" y1="16" x2="12.01" y2="16" />
-                    </svg>
+    <CurrencyProvider>
+      <div className="min-h-screen bg-(--color-background) text-(--color-foreground) font-sans flex flex-col">
+        <main className="grow w-full max-w-[1440px] mx-auto p-4 md:p-8">
+          <div className="bg-white rounded-[34px] p-6 md:p-10 shadow-sm min-h-[80vh]">
+            <header className="mb-8 flex justify-between items-center flex-wrap gap-4 border-b border-gray-100 pb-6">
+              <div>
+                <h1 className="text-4xl font-bold mb-2 text-gray-900">
+                  {journey.name}
+                </h1>
+                <div className="flex items-center gap-2 text-gray-500">
+                  <span className="bg-gray-100 px-3 py-1 rounded-full text-sm">
+                    Leader: {journey.leader.name}
                   </span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={
+                        journey.isLocked
+                          ? (e) => {
+                              e.preventDefault();
+                              toast.error(
+                                "Journey is locked. Unlock to invite new members."
+                              );
+                            }
+                          : handleShowQr
+                      }
+                      className={`${
+                        journey.isLocked
+                          ? "bg-gray-200 text-gray-500 cursor-not-allowed"
+                          : "bg-blue-100 text-blue-600 hover:bg-blue-200"
+                      } px-3 py-1 rounded-full text-sm transition-colors flex items-center gap-1 cursor-pointer`}
+                      title={
+                        journey.isLocked
+                          ? "Journey is locked. No new members can join."
+                          : "Generate a single-use join token valid for 5 minutes"
+                      }
+                      aria-label={
+                        journey.isLocked
+                          ? "Journey is locked"
+                          : "Generate a single-use join token"
+                      }
+                    >
+                      Share QR
+                      {journey.isLocked && (
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          viewBox="0 0 20 20"
+                          fill="currentColor"
+                          className="w-4 h-4"
+                        >
+                          <path
+                            fillRule="evenodd"
+                            d="M10 1a4.5 4.5 0 00-4.5 4.5V9H5a2 2 0 00-2 2v6a2 2 0 002 2h10a2 2 0 002-2v-6a2 2 0 00-2-2h-.5V5.5A4.5 4.5 0 0010 1zm3 8V5.5a3 3 0 10-6 0V9h6z"
+                            clipRule="evenodd"
+                          />
+                        </svg>
+                      )}
+                    </button>
+                    <span
+                      className="text-gray-400"
+                      title="Tokens are single-use; generating a new QR invalidates previous tokens. Token expires in 5 minutes."
+                      aria-hidden
+                    >
+                      <svg
+                        className="w-4 h-4"
+                        xmlns="http://www.w3.org/2000/svg"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth={2}
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <circle cx="12" cy="12" r="10" />
+                        <line x1="12" y1="8" x2="12" y2="12" />
+                        <line x1="12" y1="16" x2="12.01" y2="16" />
+                      </svg>
+                    </span>
+                  </div>
+                </div>
+
+                {/* Member List */}
+                <div
+                  className="flex items-center mt-3 -space-x-2 overflow-hidden cursor-pointer hover:opacity-80 transition-opacity"
+                  onClick={() => setIsMembersModalOpen(true)}
+                  title="View all members"
+                >
+                  {journey.members.slice(0, 10).map((member) => (
+                    <div
+                      key={member.id}
+                      className="h-8 w-8 rounded-full ring-2 ring-white bg-gray-100 flex items-center justify-center text-xs font-medium text-gray-600"
+                      title={member.name}
+                    >
+                      {member.name.charAt(0).toUpperCase()}
+                    </div>
+                  ))}
+                  {journey.members.length > 10 && (
+                    <div className="h-8 w-8 rounded-full ring-2 ring-white bg-gray-800 flex items-center justify-center text-xs font-medium text-white z-10">
+                      10+
+                    </div>
+                  )}
                 </div>
               </div>
-
-              {/* Member List */}
-              <div
-                className="flex items-center mt-3 -space-x-2 overflow-hidden cursor-pointer hover:opacity-80 transition-opacity"
-                onClick={() => setIsMembersModalOpen(true)}
-                title="View all members"
-              >
-                {journey.members.slice(0, 10).map((member) => (
-                  <div
-                    key={member.id}
-                    className="h-8 w-8 rounded-full ring-2 ring-white bg-gray-100 flex items-center justify-center text-xs font-medium text-gray-600"
-                    title={member.name}
-                  >
-                    {member.name.charAt(0).toUpperCase()}
-                  </div>
-                ))}
-                {journey.members.length > 10 && (
-                  <div className="h-8 w-8 rounded-full ring-2 ring-white bg-gray-800 flex items-center justify-center text-xs font-medium text-white z-10">
-                    10+
-                  </div>
+              <div className="flex gap-3">
+                {isLeader && (
+                  <>
+                    <button
+                      onClick={() => setIsSettingsOpen(true)}
+                      className="bg-gray-100 text-gray-700 px-4 py-2.5 rounded-full font-medium hover:bg-gray-200 transition-colors shadow-sm cursor-pointer"
+                    >
+                      Settings
+                    </button>
+                    {journey.pendingMembers &&
+                      journey.pendingMembers.length > 0 && (
+                        <button
+                          onClick={() => setIsPendingRequestsOpen(true)}
+                          className="bg-yellow-100 text-yellow-700 px-4 py-2.5 rounded-full font-medium hover:bg-yellow-200 transition-colors shadow-sm flex items-center gap-2 cursor-pointer"
+                        >
+                          Requests
+                          <span className="bg-yellow-600 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+                            {journey.pendingMembers.length}
+                          </span>
+                        </button>
+                      )}
+                  </>
                 )}
-              </div>
-            </div>
-            <div className="flex gap-3">
-              {isLeader && (
-                <>
-                  <button
-                    onClick={() => setIsSettingsOpen(true)}
-                    className="bg-gray-100 text-gray-700 px-4 py-2.5 rounded-full font-medium hover:bg-gray-200 transition-colors shadow-sm cursor-pointer"
-                  >
-                    Settings
-                  </button>
-                  {journey.pendingMembers &&
-                    journey.pendingMembers.length > 0 && (
-                      <button
-                        onClick={() => setIsPendingRequestsOpen(true)}
-                        className="bg-yellow-100 text-yellow-700 px-4 py-2.5 rounded-full font-medium hover:bg-yellow-200 transition-colors shadow-sm flex items-center gap-2 cursor-pointer"
-                      >
-                        Requests
-                        <span className="bg-yellow-600 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
-                          {journey.pendingMembers.length}
-                        </span>
-                      </button>
-                    )}
-                </>
-              )}
-              <button
-                onClick={() => setIsSettleModalOpen(true)}
-                className="bg-green-600 text-white px-6 py-2.5 rounded-full font-medium hover:bg-green-700 transition-colors shadow-sm cursor-pointer"
-              >
-                Settle Up
-              </button>
-              <button
-                disabled={isLeaving}
-                onClick={() => {
-                  if (isLeaving) return;
-                  toast((t) => (
-                    <div className="flex flex-col gap-2">
-                      <span className="font-medium text-sm">
-                        Leave this journey?
-                      </span>
-                      <div className="flex gap-2">
-                        <button
-                          className="bg-red-500 text-white px-3 py-1 rounded-lg text-xs cursor-pointer"
-                          onClick={() => {
-                            toast.dismiss(t.id);
-                            handleLeave();
-                          }}
-                        >
-                          Yes
-                        </button>
-                        <button
-                          className="bg-gray-200 px-3 py-1 rounded-lg text-xs cursor-pointer"
-                          onClick={() => toast.dismiss(t.id)}
-                        >
-                          No
-                        </button>
-                      </div>
-                    </div>
-                  ));
-                }}
-                className="bg-red-50 text-red-600 px-6 py-2.5 rounded-full font-medium hover:bg-red-100 transition-colors border border-red-100 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-              >
-                {isLeaving ? "Leaving..." : "Leave Journey"}
-              </button>
-            </div>
-          </header>
-
-          {journey.expireAt && isEndingSoon && (
-            <div className="bg-red-50 border border-red-100 text-red-700 p-4 mb-8 rounded-2xl flex items-start gap-4">
-              <div className="p-2 bg-red-100 rounded-full">
-                <svg
-                  className="fill-current h-5 w-5 text-red-500"
-                  xmlns="http://www.w3.org/2000/svg"
-                  viewBox="0 0 20 20"
+                <button
+                  onClick={() => setIsUserSettingsOpen(true)}
+                  className="bg-gray-100 text-gray-700 px-3 py-2.5 rounded-full font-medium hover:bg-gray-200 transition-colors shadow-sm cursor-pointer"
+                  title="Display Preferences"
                 >
-                  <path d="M2.93 17.07A10 10 0 1 1 17.07 2.93 10 10 0 0 1 2.93 17.07zm12.73-1.41A8 8 0 1 0 4.34 4.34a8 8 0 0 0 11.32 11.32zM9 11V9h2v6H9v-4zm0-6h2v2H9V5z" />
-                </svg>
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    strokeWidth={1.5}
+                    stroke="currentColor"
+                    className="w-5 h-5"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M10.5 6h9.75M10.5 6a1.5 1.5 0 1 1-3 0m3 0a1.5 1.5 0 1 0-3 0M3.75 6H7.5m3 12h9.75m-9.75 0a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m-3.75 0H7.5m9-6h3.75m-3.75 0a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m-9.75 0h9.75"
+                    />
+                  </svg>
+                </button>
+                <button
+                  onClick={() => setIsSettleModalOpen(true)}
+                  className="bg-green-600 text-white px-6 py-2.5 rounded-full font-medium hover:bg-green-700 transition-colors shadow-sm cursor-pointer"
+                >
+                  Settle Up
+                </button>
+                <button
+                  disabled={isLeaving}
+                  onClick={() => {
+                    if (isLeaving) return;
+                    toast((t) => (
+                      <div className="flex flex-col gap-2">
+                        <span className="font-medium text-sm">
+                          Leave this journey?
+                        </span>
+                        <div className="flex gap-2">
+                          <button
+                            className="bg-red-500 text-white px-3 py-1 rounded-lg text-xs cursor-pointer"
+                            onClick={() => {
+                              toast.dismiss(t.id);
+                              handleLeave();
+                            }}
+                          >
+                            Yes
+                          </button>
+                          <button
+                            className="bg-gray-200 px-3 py-1 rounded-lg text-xs cursor-pointer"
+                            onClick={() => toast.dismiss(t.id)}
+                          >
+                            No
+                          </button>
+                        </div>
+                      </div>
+                    ));
+                  }}
+                  className="bg-red-50 text-red-600 px-6 py-2.5 rounded-full font-medium hover:bg-red-100 transition-colors border border-red-100 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                >
+                  {isLeaving ? "Leaving..." : "Leave Journey"}
+                </button>
               </div>
-              <div>
-                <p className="font-bold text-lg">Journey Ending Soon</p>
-                <p className="text-sm opacity-90 mt-1">
-                  The leader has left or the journey is expiring. This room will
-                  be deleted on {new Date(journey.expireAt).toLocaleString()}{" "}
-                  (your local time).
-                  <br />
-                  Please save your data immediately.
-                </p>
+            </header>
+
+            {journey.expireAt && isEndingSoon && (
+              <div className="bg-red-50 border border-red-100 text-red-700 p-4 mb-8 rounded-2xl flex items-start gap-4">
+                <div className="p-2 bg-red-100 rounded-full">
+                  <svg
+                    className="fill-current h-5 w-5 text-red-500"
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 20 20"
+                  >
+                    <path d="M2.93 17.07A10 10 0 1 1 17.07 2.93 10 10 0 0 1 2.93 17.07zm12.73-1.41A8 8 0 1 0 4.34 4.34a8 8 0 0 0 11.32 11.32zM9 11V9h2v6H9v-4zm0-6h2v2H9V5z" />
+                  </svg>
+                </div>
+                <div>
+                  <p className="font-bold text-lg">Journey Ending Soon</p>
+                  <p className="text-sm opacity-90 mt-1">
+                    The leader has left or the journey is expiring. This room
+                    will be deleted on{" "}
+                    {new Date(journey.expireAt).toLocaleString()} (your local
+                    time).
+                    <br />
+                    Please save your data immediately.
+                  </p>
+                </div>
               </div>
-            </div>
-          )}
+            )}
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            {/* Left Column: Stats & Actions */}
-            <div className="lg:col-span-1 space-y-6">
-              <MyTotalSpend
-                expenses={journey.expenses}
-                currentUserId={currentUser.id}
-              />
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+              {/* Left Column: Stats & Actions */}
+              <div className="lg:col-span-1 space-y-6">
+                <MyTotalSpend
+                  expenses={journey.expenses}
+                  currentUserId={currentUser.id}
+                />
 
-              <AddExpenseForm
-                journeyId={journey.id}
-                currentUser={currentUser}
-                members={journey.members}
-              />
-            </div>
+                <AddExpenseForm
+                  journeyId={journey.id}
+                  currentUser={currentUser}
+                  members={journey.members}
+                />
+              </div>
 
-            {/* Right Column: Feed */}
-            <div className="lg:col-span-2">
-              <ActivityFeed
-                expenses={journey.expenses}
-                currentUserId={currentUser.id}
-                members={journey.members}
-              />
+              {/* Right Column: Feed */}
+              <div className="lg:col-span-2">
+                <ActivityFeed
+                  expenses={journey.expenses}
+                  currentUserId={currentUser.id}
+                  members={journey.members}
+                />
+              </div>
             </div>
           </div>
-        </div>
-      </main>
+        </main>
 
-      <SettleUpModal
-        journeyId={journey.id}
-        currentUser={currentUser}
-        members={journey.members}
-        expenses={journey.expenses}
-        isOpen={isSettleModalOpen}
-        onClose={() => setIsSettleModalOpen(false)}
-      />
+        <SettleUpModal
+          journeyId={journey.id}
+          currentUser={currentUser}
+          members={journey.members}
+          expenses={journey.expenses}
+          isOpen={isSettleModalOpen}
+          onClose={() => setIsSettleModalOpen(false)}
+        />
 
-      <JourneySettingsModal
-        isOpen={isSettingsOpen}
-        onClose={() => setIsSettingsOpen(false)}
-        journeyId={journey.id}
-        currentRequireApproval={journey.requireApproval}
-        currentIsLocked={journey.isLocked}
-        hasPassword={journey.hasPassword}
-      />
+        <JourneySettingsModal
+          isOpen={isSettingsOpen}
+          onClose={() => setIsSettingsOpen(false)}
+          journeyId={journey.id}
+          currentRequireApproval={journey.requireApproval}
+          currentIsLocked={journey.isLocked}
+          hasPassword={journey.hasPassword}
+        />
 
-      <PendingRequestsModal
-        isOpen={isPendingRequestsOpen}
-        onClose={() => setIsPendingRequestsOpen(false)}
-        journeyId={journey.id}
-        pendingMembers={journey.pendingMembers || []}
-      />
+        <PendingRequestsModal
+          isOpen={isPendingRequestsOpen}
+          onClose={() => setIsPendingRequestsOpen(false)}
+          journeyId={journey.id}
+          pendingMembers={journey.pendingMembers || []}
+        />
 
-      <MembersModal
-        isOpen={isMembersModalOpen}
-        onClose={() => setIsMembersModalOpen(false)}
-        members={journey.members}
-        isLeader={isLeader}
-        currentUserId={currentUser.id}
-        onRemoveMember={handleRemoveMember}
-        journeyId={journey.id}
-        onRefresh={() => refetch()}
-      />
+        <MembersModal
+          isOpen={isMembersModalOpen}
+          onClose={() => setIsMembersModalOpen(false)}
+          members={journey.members}
+          isLeader={isLeader}
+          currentUserId={currentUser.id}
+          onRemoveMember={handleRemoveMember}
+          journeyId={journey.id}
+          onRefresh={() => refetch()}
+        />
 
-      {showQr && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl p-8 max-w-sm w-full text-center relative">
-            <button
-              onClick={() => setShowQr(false)}
-              className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 cursor-pointer"
-            >
-              <svg
-                className="w-6 h-6"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M6 18L18 6M6 6l12 12"
-                />
-              </svg>
-            </button>
-            <Image
-              src="/icons/plane.svg"
-              alt=""
-              aria-hidden
-              className="absolute top-4 left-4 opacity-90 pointer-events-none"
-              width={32}
-              height={32}
-            />
-            <h3 className="text-xl font-bold mb-4">Join Journey</h3>
-            <div className="flex justify-center mb-4 relative">
-              <Image
-                src="/images/map-bg.svg"
-                alt=""
-                aria-hidden
-                className="absolute inset-0 object-cover opacity-10 pointer-events-none"
-                fill
-              />
-              <StyledQRCode
-                value={`${
-                  typeof window !== "undefined" ? window.location.origin : ""
-                }/join?token=${joinToken}`}
-                size={220}
-                className="rounded-lg bg-white p-3 shadow-sm"
-              />
-            </div>
-            <p className="text-sm text-gray-500 mb-4 inline-flex items-center gap-2">
-              Scan this QR code to join. Valid for 5 minutes.
-              <span
-                className="text-gray-400"
-                title="These tokens are single-use. Generating a new QR invalidates previous tokens."
-                aria-hidden
+        {showQr && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-2xl p-8 max-w-sm w-full text-center relative">
+              <button
+                onClick={() => setShowQr(false)}
+                className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 cursor-pointer"
               >
                 <svg
-                  className="w-4 h-4"
-                  xmlns="http://www.w3.org/2000/svg"
-                  viewBox="0 0 24 24"
+                  className="w-6 h-6"
                   fill="none"
                   stroke="currentColor"
-                  strokeWidth={2}
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
+                  viewBox="0 0 24 24"
                 >
-                  <circle cx="12" cy="12" r="10" />
-                  <line x1="12" y1="8" x2="12" y2="12" />
-                  <line x1="12" y1="16" x2="12.01" y2="16" />
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M6 18L18 6M6 6l12 12"
+                  />
                 </svg>
-              </span>
-            </p>
+              </button>
+              <Image
+                src="/icons/plane.svg"
+                alt=""
+                aria-hidden
+                className="absolute top-4 left-4 opacity-90 pointer-events-none"
+                width={32}
+                height={32}
+              />
+              <h3 className="text-xl font-bold mb-4">Join Journey</h3>
+              <div className="flex justify-center mb-4 relative">
+                <Image
+                  src="/images/map-bg.svg"
+                  alt=""
+                  aria-hidden
+                  className="absolute inset-0 object-cover opacity-10 pointer-events-none"
+                  fill
+                />
+                <StyledQRCode
+                  value={`${
+                    typeof window !== "undefined" ? window.location.origin : ""
+                  }/join?token=${joinToken}`}
+                  size={220}
+                  className="rounded-lg bg-white p-3 shadow-sm"
+                />
+              </div>
+              <p className="text-sm text-gray-500 mb-4 inline-flex items-center gap-2">
+                Scan this QR code to join. Valid for 5 minutes.
+                <span
+                  className="text-gray-400"
+                  title="These tokens are single-use. Generating a new QR invalidates previous tokens."
+                  aria-hidden
+                >
+                  <svg
+                    className="w-4 h-4"
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <circle cx="12" cy="12" r="10" />
+                    <line x1="12" y1="8" x2="12" y2="12" />
+                    <line x1="12" y1="16" x2="12.01" y2="16" />
+                  </svg>
+                </span>
+              </p>
+            </div>
           </div>
-        </div>
-      )}
-    </div>
+        )}
+        <UserSettingsModal
+          isOpen={isUserSettingsOpen}
+          onClose={() => setIsUserSettingsOpen(false)}
+        />
+      </div>
+    </CurrencyProvider>
   );
 }

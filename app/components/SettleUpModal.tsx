@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useCurrency } from "../context/CurrencyContext";
 import { gql } from "@apollo/client";
 import { useMutation } from "@apollo/client/react";
 import toast from "react-hot-toast";
@@ -118,6 +119,7 @@ export default function SettleUpModal({
   isOpen,
   onClose,
 }: SettleUpModalProps) {
+  const { formatCurrency } = useCurrency();
   const [recipientId, setRecipientId] = useState("");
   const [deduction, setDeduction] = useState("");
   const [reason, setReason] = useState("");
@@ -406,7 +408,7 @@ export default function SettleUpModal({
                         }
                       >
                         {isOwed ? "owes you" : "you owe"} $
-                        {Math.abs(balance).toFixed(2)}
+                        {formatCurrency(Math.abs(balance))}
                       </span>
                     </div>
 
@@ -550,7 +552,7 @@ export default function SettleUpModal({
 
                             <div className="flex items-center gap-2 flex-none mt-2 sm:mt-0">
                               <span className="font-mono whitespace-nowrap">
-                                -${d.amount.toFixed(2)}
+                                -${formatCurrency(d.amount)}
                               </span>
 
                               {d.payerId === currentUser.id && (
@@ -659,7 +661,7 @@ export default function SettleUpModal({
               )
               .map((m) => (
                 <option key={m.id} value={m.id} className="cursor-pointer">
-                  {m.name} (Owes: ${(balances[m.id] || 0).toFixed(2)})
+                  {m.name} (Owes: ${formatCurrency(balances[m.id] || 0)})
                 </option>
               ))}
           </select>

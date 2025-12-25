@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, ChangeEvent } from "react";
+import { useCurrency } from "../context/CurrencyContext";
 import { gql } from "@apollo/client";
 import { useMutation } from "@apollo/client/react";
 import Image from "next/image";
@@ -47,6 +48,7 @@ export default function AddExpenseForm({
   currentUser,
   members,
 }: AddExpenseFormProps) {
+  const { formatCurrency } = useCurrency();
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
   const [imageBase64, setImageBase64] = useState<string | null>(null);
@@ -145,9 +147,9 @@ export default function AddExpenseForm({
 
       if (Math.abs(totalInputAmount - parseFloat(amount)) > 0.01) {
         toast.error(
-          `Total split amount (${totalInputAmount.toFixed(
-            2
-          )}) must equal expense amount (${parseFloat(amount).toFixed(2)})`
+          `Total split amount (${formatCurrency(
+            totalInputAmount
+          )}) must equal expense amount (${formatCurrency(parseFloat(amount))})`
         );
         return;
       }

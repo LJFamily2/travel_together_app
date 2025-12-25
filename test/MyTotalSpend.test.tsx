@@ -3,6 +3,7 @@
  */
 import { render, screen } from "@testing-library/react";
 import MyTotalSpend from "../app/components/MyTotalSpend";
+import { CurrencyProvider } from "../app/context/CurrencyContext";
 import "@testing-library/jest-dom";
 
 describe("MyTotalSpend", () => {
@@ -23,9 +24,13 @@ describe("MyTotalSpend", () => {
     ];
     // I paid 100. My cost is 50. Net balance = 100 - 50 = +50.
 
-    render(<MyTotalSpend expenses={expenses} currentUserId={currentUserId} />);
+    render(
+      <CurrencyProvider>
+        <MyTotalSpend expenses={expenses} currentUserId={currentUserId} />
+      </CurrencyProvider>
+    );
 
-    expect(screen.getByText("+50.00")).toBeInTheDocument();
+    expect(screen.getByText("+50")).toBeInTheDocument();
     expect(screen.getByText("You are owed")).toBeInTheDocument();
   });
 
@@ -60,9 +65,13 @@ describe("MyTotalSpend", () => {
     // Total Cost: 50.
     // Net Balance: 90 - 50 = +40.
 
-    render(<MyTotalSpend expenses={expenses} currentUserId={currentUserId} />);
+    render(
+      <CurrencyProvider>
+        <MyTotalSpend expenses={expenses} currentUserId={currentUserId} />
+      </CurrencyProvider>
+    );
 
-    expect(screen.getByText("+40.00")).toBeInTheDocument();
+    expect(screen.getByText("+40")).toBeInTheDocument();
   });
 
   it("calculates net balance correctly when I pay a deduction (settlement)", () => {
@@ -96,9 +105,13 @@ describe("MyTotalSpend", () => {
     // Total Cost: 50 - 10 = 40.
     // Net Balance: 0 - 40 = -40.
 
-    render(<MyTotalSpend expenses={expenses} currentUserId={currentUserId} />);
+    render(
+      <CurrencyProvider>
+        <MyTotalSpend expenses={expenses} currentUserId={currentUserId} />
+      </CurrencyProvider>
+    );
 
-    expect(screen.getByText("-40.00")).toBeInTheDocument();
+    expect(screen.getByText("-40")).toBeInTheDocument();
     expect(screen.getByText("You owe")).toBeInTheDocument();
   });
 });

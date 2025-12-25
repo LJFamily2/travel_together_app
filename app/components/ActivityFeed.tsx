@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { useState, ChangeEvent } from "react";
+import { useCurrency } from "../context/CurrencyContext";
 import { gql } from "@apollo/client";
 import { useMutation } from "@apollo/client/react";
 import toast from "react-hot-toast";
@@ -87,6 +88,7 @@ export default function ActivityFeed({
   currentUserId,
   members,
 }: ActivityFeedProps) {
+  const { formatCurrency } = useCurrency();
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
 
   // Edit Form State
@@ -323,7 +325,7 @@ export default function ActivityFeed({
       <div className="flex justify-between items-center mb-4">
         <h3 className="text-lg font-bold">Activity Feed</h3>
         <span className="font-semibold text-gray-700">
-          Total: ${totalInvolvedAmount.toFixed(2)}
+          Total: ${formatCurrency(totalInvolvedAmount)}
         </span>
       </div>
       <div className="space-y-4">
@@ -348,13 +350,13 @@ export default function ActivityFeed({
                   <p className="font-semibold text-lg">{expense.description}</p>
                   <p className="text-sm text-gray-500">
                     Paid by {expense.payer.name} • $
-                    {expense.totalAmount.toFixed(2)}
+                    {formatCurrency(expense.totalAmount)}
                   </p>
                   <p className="text-sm font-medium text-black mt-1">
-                    Your share: ${myShare.toFixed(2)}
+                    Your share: ${formatCurrency(myShare)}
                     {mySplit && mySplit.deduction > 0 && (
                       <span className="text-xs text-gray-500 block">
-                        (Deduction: ${mySplit.deduction.toFixed(2)} -{" "}
+                        (Deduction: ${formatCurrency(mySplit.deduction)} -{" "}
                         {mySplit.reason || "No reason provided"})
                       </span>
                     )}

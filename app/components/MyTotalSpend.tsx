@@ -1,5 +1,7 @@
 "use client";
 
+import { useCurrency } from "../context/CurrencyContext";
+
 interface Split {
   user: {
     id: string;
@@ -26,6 +28,7 @@ export default function MyTotalSpend({
   expenses,
   currentUserId,
 }: MyTotalSpendProps) {
+  const { formatCurrency } = useCurrency();
   let myTotalCost = 0;
   let myTotalPayments = 0;
 
@@ -59,7 +62,7 @@ export default function MyTotalSpend({
           <div className="mt-1">
             <div className="overflow-x-auto overflow-y-hidden">
               <span className="inline-block min-w-max font-mono text-2xl sm:text-3xl font-bold text-gray-900 text-right">
-                ${myTotalCost.toFixed(2)}
+                ${formatCurrency(myTotalCost)}
               </span>
             </div>
           </div>
@@ -74,8 +77,8 @@ export default function MyTotalSpend({
                 } text-right`}
               >
                 {netBalance >= 0
-                  ? `+${netBalance.toFixed(2)}`
-                  : `${netBalance.toFixed(2)}`}
+                  ? `+${formatCurrency(netBalance)}`
+                  : `${formatCurrency(netBalance)}`}
               </span>
             </div>
           </div>
