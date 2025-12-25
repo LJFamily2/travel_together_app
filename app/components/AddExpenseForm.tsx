@@ -260,7 +260,7 @@ export default function AddExpenseForm({
             <button
               type="button"
               onClick={() => setSplitType("equal")}
-              className={`px-3 py-1 text-xs font-medium rounded-md transition-all ${
+              className={`cursor-pointer px-3 py-1 text-xs font-medium rounded-md transition-all ${
                 splitType === "equal"
                   ? "bg-white text-black shadow-sm"
                   : "text-gray-500 hover:text-gray-700"
@@ -271,7 +271,7 @@ export default function AddExpenseForm({
             <button
               type="button"
               onClick={() => setSplitType("separate")}
-              className={`px-3 py-1 text-xs font-medium rounded-md transition-all ${
+              className={`cursor-pointer px-3 py-1 text-xs font-medium rounded-md transition-all ${
                 splitType === "separate"
                   ? "bg-white text-black shadow-sm"
                   : "text-gray-500 hover:text-gray-700"
@@ -433,7 +433,7 @@ export default function AddExpenseForm({
           type="file"
           accept="image/*"
           onChange={handleImageChange}
-          className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-black file:text-white hover:file:opacity-80"
+          className="cursor-pointer w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-black file:text-white hover:file:opacity-80"
         />
         {imageBase64 && (
           <Image

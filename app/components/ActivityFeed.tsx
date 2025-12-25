@@ -468,7 +468,7 @@ export default function ActivityFeed({
                       <button
                         type="button"
                         onClick={() => setSplitType("equal")}
-                        className={`px-3 py-1 text-xs font-medium rounded-md transition-all ${
+                        className={`cursor-pointer px-3 py-1 text-xs font-medium rounded-md transition-all ${
                           splitType === "equal"
                             ? "bg-white text-black shadow-sm"
                             : "text-gray-500 hover:text-gray-700"
@@ -479,7 +479,7 @@ export default function ActivityFeed({
                       <button
                         type="button"
                         onClick={() => setSplitType("separate")}
-                        className={`px-3 py-1 text-xs font-medium rounded-md transition-all ${
+                        className={`cursor-pointer px-3 py-1 text-xs font-medium rounded-md transition-all ${
                           splitType === "separate"
                             ? "bg-white text-black shadow-sm"
                             : "text-gray-500 hover:text-gray-700"
@@ -651,7 +651,7 @@ export default function ActivityFeed({
                     type="file"
                     accept="image/*"
                     onChange={handleImageChange}
-                    className="w-full text-sm"
+                    className="w-full text-sm cursor-pointer"
                   />
                   {imageBase64 && (
                     <div className="mt-2 relative h-20 w-20">
