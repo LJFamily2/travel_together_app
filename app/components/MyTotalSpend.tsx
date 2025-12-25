@@ -30,8 +30,16 @@ export default function MyTotalSpend({
   let myTotalPayments = 0;
 
   expenses.forEach((expense) => {
+    const isSettlement = expense.splits.some(
+      (s) => s.baseAmount === 0 && (s.deduction || 0) > 0
+    );
+
     if (expense.payer.id === currentUserId) {
-      myTotalPayments += expense.totalAmount;
+      if (isSettlement) {
+        myTotalPayments -= expense.totalAmount;
+      } else {
+        myTotalPayments += expense.totalAmount;
+      }
     }
 
     const mySplit = expense.splits.find((s) => s.user.id === currentUserId);
