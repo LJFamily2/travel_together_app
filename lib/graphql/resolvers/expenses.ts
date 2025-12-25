@@ -12,6 +12,8 @@ interface SplitInput {
   reason?: string;
 }
 
+type ExpenseWithHasImage = IExpense & { hasImage?: boolean };
+
 const expenseResolvers = {
   Mutation: {
     addExpense: async (
@@ -139,11 +141,11 @@ const expenseResolvers = {
         if (totalAmount !== undefined) {
           // Validate total matches the sum of base amounts and deductions
           const sumBase = expense.splits.reduce(
-            (acc: number, s: any) => acc + (s.baseAmount || 0),
+            (acc: number, s) => acc + (s.baseAmount || 0),
             0
           );
           const sumDeductions = expense.splits.reduce(
-            (acc: number, s: any) => acc + (s.deduction || 0),
+            (acc: number, s) => acc + (s.deduction || 0),
             0
           );
           const totalFromSplits = sumBase + sumDeductions;
@@ -165,7 +167,7 @@ const expenseResolvers = {
         const oldTotal = expense.totalAmount || 0;
         if (oldTotal > 0) {
           const ratio = totalAmount / oldTotal;
-          expense.splits = expense.splits.map((s: any) => ({
+          expense.splits = expense.splits.map((s) => ({
             userId: s.userId,
             baseAmount:
               Math.round((s.baseAmount * ratio + Number.EPSILON) * 100) / 100,
@@ -216,7 +218,7 @@ const expenseResolvers = {
   },
   Expense: {
     payer: (parent: IExpense) => parent.payerId,
-    hasImage: (parent: any) => {
+    hasImage: (parent: ExpenseWithHasImage) => {
       if (parent.hasImage !== undefined) return parent.hasImage;
       return !!parent.imageBinary;
     },
