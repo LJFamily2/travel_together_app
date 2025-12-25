@@ -36,11 +36,20 @@ const expenseResolvers = {
       // Logic check: (Split Amount) - (Deduction) = Final Owed is handled in UI or calculation,
       // here we just store the data.
 
-      // Validate total amount matches splits
-      const sumSplits = splits.reduce((acc, s) => acc + s.baseAmount, 0);
-      if (Math.abs(sumSplits - totalAmount) > 0.01) {
+      // Validate total amount matches splits (accounting for deductions)
+      const sumBase = splits.reduce((acc, s) => acc + (s.baseAmount || 0), 0);
+      const sumDeductions = splits.reduce(
+        (acc, s) => acc + (s.deduction || 0),
+        0
+      );
+      const totalFromSplits = sumBase + sumDeductions;
+      if (Math.abs(totalFromSplits - totalAmount) > 0.01) {
         throw new Error(
-          `The sum of splits (${sumSplits.toFixed(
+          `The sum of splits (base: ${sumBase.toFixed(
+            2
+          )}, deductions: ${sumDeductions.toFixed(
+            2
+          )}, total: ${totalFromSplits.toFixed(
             2
           )}) must equal the total amount (${totalAmount.toFixed(2)})`
         );
@@ -128,6 +137,27 @@ const expenseResolvers = {
           reason: s.reason,
         }));
         if (totalAmount !== undefined) {
+          // Validate total matches the sum of base amounts and deductions
+          const sumBase = expense.splits.reduce(
+            (acc: number, s: any) => acc + (s.baseAmount || 0),
+            0
+          );
+          const sumDeductions = expense.splits.reduce(
+            (acc: number, s: any) => acc + (s.deduction || 0),
+            0
+          );
+          const totalFromSplits = sumBase + sumDeductions;
+          if (Math.abs(totalFromSplits - totalAmount) > 0.01) {
+            throw new Error(
+              `The sum of splits (base: ${sumBase.toFixed(
+                2
+              )}, deductions: ${sumDeductions.toFixed(
+                2
+              )}, total: ${totalFromSplits.toFixed(
+                2
+              )}) must equal the total amount (${totalAmount.toFixed(2)})`
+            );
+          }
           expense.totalAmount = totalAmount;
         }
       } else if (totalAmount !== undefined && totalAmount !== null) {

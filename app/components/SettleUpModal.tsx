@@ -25,6 +25,28 @@ const ADD_EXPENSE = gql`
   }
 `;
 
+const UPDATE_EXPENSE = gql`
+  mutation UpdateExpense(
+    $expenseId: ID!
+    $splits: [SplitInput]!
+    $totalAmount: Float!
+  ) {
+    updateExpense(
+      expenseId: $expenseId
+      splits: $splits
+      totalAmount: $totalAmount
+    ) {
+      id
+    }
+  }
+`;
+
+const DELETE_EXPENSE = gql`
+  mutation DeleteExpense($expenseId: ID!) {
+    deleteExpense(expenseId: $expenseId)
+  }
+`;
+
 const UPDATE_BANK_INFO = gql`
   mutation UpdateBankInfo(
     $bankName: String
@@ -115,20 +137,44 @@ export default function SettleUpModal({
   const [updateBankInfo, { loading: updatingBank }] =
     useMutation(UPDATE_BANK_INFO);
 
+  // Mutations for editing/removing deductions
+  const [updateExpense] = useMutation(UPDATE_EXPENSE);
+  const [deleteExpense] = useMutation(DELETE_EXPENSE);
+  const [editing, setEditing] = useState<{
+    expenseId: string;
+    amount: number;
+    reason: string;
+    splitUserId: string;
+  } | null>(null);
+  const [menuOpen, setMenuOpen] = useState<Record<string, boolean>>({});
+
+  const toggleMenu = (expenseId: string) => {
+    setMenuOpen((prev) => ({ ...prev, [expenseId]: !prev[expenseId] }));
+  };
+  const closeAllMenus = () => setMenuOpen({});
+
   const [expandedUserId, setExpandedUserId] = useState<string | null>(null);
 
   if (!isOpen) return null;
 
   // Calculate balances
   const balances: Record<string, number> = {};
-  // Store deduction history for each user
+  // Store deduction history for each user, include metadata for edit/delete
   const deductionHistory: Record<
     string,
-    { amount: number; reason: string; date: string }[]
+    {
+      amount: number;
+      reason: string;
+      date: string;
+      expenseId: string;
+      payerId: string;
+      splitUserId: string;
+    }[]
   > = {};
 
   expenses.forEach((expense) => {
     const payerId = expense.payer.id;
+    const expenseId = expense.id;
 
     // Check if this is a deduction transaction created by me for someone else
     // Or created by someone else for me
@@ -149,6 +195,9 @@ export default function SettleUpModal({
               amount: split.deduction,
               reason: split.reason || "Deduction",
               date: expense.createdAt || "", // Assuming createdAt exists on expense type, if not need to add
+              expenseId,
+              payerId,
+              splitUserId: split.user.id,
             });
           }
         });
@@ -171,6 +220,9 @@ export default function SettleUpModal({
             amount: mySplit.deduction,
             reason: mySplit.reason || "Deduction",
             date: expense.createdAt || "",
+            expenseId,
+            payerId,
+            splitUserId: mySplit.user.id,
           });
         }
       }
@@ -334,7 +386,7 @@ export default function SettleUpModal({
                 return (
                   <div
                     key={member.id}
-                    className="bg-gray-50 rounded-xl overflow-hidden"
+                    className="bg-gray-50 rounded-xl overflow-visible"
                   >
                     <div
                       className="flex justify-between items-center text-sm p-3 cursor-pointer hover:bg-gray-100 transition-colors"
@@ -363,15 +415,196 @@ export default function SettleUpModal({
                         <p className="font-semibold mb-1 text-gray-500">
                           Deduction History:
                         </p>
+
+                        {editing &&
+                          editing.expenseId &&
+                          deductions.some(
+                            (d) => d.expenseId === editing.expenseId
+                          ) && (
+                            <div className="mb-2 p-2 bg-white rounded-lg border border-gray-200">
+                              <div className="flex gap-2 items-center mb-2">
+                                <input
+                                  type="number"
+                                  value={editing.amount}
+                                  onChange={(e) =>
+                                    setEditing(
+                                      (prev) =>
+                                        prev && {
+                                          ...prev,
+                                          amount: parseFloat(e.target.value),
+                                        }
+                                    )
+                                  }
+                                  className="w-28 p-1 border border-gray-200 rounded-lg text-sm"
+                                />
+                                <input
+                                  type="text"
+                                  value={editing.reason}
+                                  onChange={(e) =>
+                                    setEditing(
+                                      (prev) =>
+                                        prev && {
+                                          ...prev,
+                                          reason: e.target.value,
+                                        }
+                                    )
+                                  }
+                                  className="p-1 border border-gray-200 rounded-lg text-sm flex-1"
+                                />
+                              </div>
+                              <div className="flex gap-2 justify-end">
+                                <button
+                                  onClick={() => setEditing(null)}
+                                  className="px-2 py-1 bg-gray-200 rounded text-xs"
+                                >
+                                  Cancel
+                                </button>
+                                <button
+                                  onClick={async () => {
+                                    if (!editing) return;
+                                    try {
+                                      const expense = expenses.find(
+                                        (e) => e.id === editing.expenseId
+                                      );
+                                      if (!expense)
+                                        throw new Error("Expense not found");
+
+                                      const splitsInput = expense.splits.map(
+                                        (s) => ({
+                                          userId: s.user.id,
+                                          baseAmount: s.baseAmount,
+                                          deduction:
+                                            s.user.id === editing.splitUserId
+                                              ? editing.amount || 0
+                                              : s.deduction || 0,
+                                          reason:
+                                            s.user.id === editing.splitUserId
+                                              ? editing.reason || s.reason
+                                              : s.reason,
+                                        })
+                                      );
+
+                                      // compute new total
+                                      const sumBase = splitsInput.reduce(
+                                        (acc, s) =>
+                                          acc + (s.baseAmount || 0),
+                                        0
+                                      );
+                                      const sumDeductions = splitsInput.reduce(
+                                        (acc, s) =>
+                                          acc + (s.deduction || 0),
+                                        0
+                                      );
+                                      const totalFromSplits =
+                                        sumBase + sumDeductions;
+
+                                      await updateExpense({
+                                        variables: {
+                                          expenseId: editing.expenseId,
+                                          splits: splitsInput,
+                                          totalAmount: totalFromSplits,
+                                        },
+                                      });
+
+                                      toast.success("Deduction updated");
+                                      setEditing(null);
+                                      onClose();
+                                    } catch (err) {
+                                      console.error(
+                                        "Failed to update deduction:",
+                                        err
+                                      );
+                                      toast.error("Failed to update deduction");
+                                    }
+                                  }}
+                                  className="px-2 py-1 bg-blue-600 text-white rounded text-xs"
+                                >
+                                  Save
+                                </button>
+                              </div>
+                            </div>
+                          )}
+
                         {deductions.map((d, idx) => (
                           <div
                             key={idx}
-                            className="flex justify-between py-1 border-b border-gray-200 last:border-0"
+                            className="flex justify-between items-center py-1 border-b border-gray-200 last:border-0"
                           >
-                            <span>{d.reason}</span>
-                            <span className="font-mono">
-                              -${d.amount.toFixed(2)}
-                            </span>
+                            <div className="flex gap-3 items-center flex-1 min-w-0">
+                              <span className="truncate text-sm">
+                                {d.reason}
+                              </span>
+                              <span className="text-xs text-gray-400 flex-none ml-2">
+                                {d.date}
+                              </span>
+                            </div>
+
+                            <div className="flex items-center gap-2 flex-none">
+                              <span className="font-mono whitespace-nowrap ml-2">
+                                -${d.amount.toFixed(2)}
+                              </span>
+
+                              {d.payerId === currentUser.id && (
+                                <div className="relative">
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      toggleMenu(d.expenseId);
+                                    }}
+                                    aria-label="Open actions"
+                                    className="p-1 rounded hover:bg-gray-200 text-gray-600"
+                                  >
+                                    ⋯
+                                  </button>
+
+                                  {menuOpen[d.expenseId] && (
+                                    <div className="absolute right-2 mt-2 min-w-[120px] max-w-xs bg-white border rounded shadow-sm z-50">
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setEditing({
+                                            expenseId: d.expenseId,
+                                            amount: d.amount,
+                                            reason: d.reason || "",
+                                            splitUserId: d.splitUserId,
+                                          });
+                                          closeAllMenus();
+                                        }}
+                                        className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50"
+                                      >
+                                        Edit
+                                      </button>
+                                      <button
+                                        onClick={async (e) => {
+                                          e.stopPropagation();
+                                          try {
+                                            await deleteExpense({
+                                              variables: {
+                                                expenseId: d.expenseId,
+                                              },
+                                            });
+                                            toast.success("Deduction removed");
+                                            closeAllMenus();
+                                            onClose();
+                                          } catch (err) {
+                                            console.error(
+                                              "Failed to delete deduction:",
+                                              err
+                                            );
+                                            toast.error(
+                                              "Failed to remove deduction"
+                                            );
+                                          }
+                                        }}
+                                        className="w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-gray-50"
+                                      >
+                                        Remove
+                                      </button>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </div>
                           </div>
                         ))}
                       </div>
