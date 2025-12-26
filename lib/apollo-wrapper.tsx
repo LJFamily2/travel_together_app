@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
 import React from "react";
@@ -22,10 +23,11 @@ function makeClient() {
         : "/api/graphql",
   });
 
-  const errorLink = onError(({ graphQLErrors, networkError }) => {
+  const errorLink = onError((error: any) => {
+    const { graphQLErrors, networkError } = error || {};
     if (graphQLErrors && graphQLErrors.length > 0) {
-      graphQLErrors.forEach((err) => {
-        const code = (err as any).extensions?.code;
+      graphQLErrors.forEach((err: any) => {
+        const code = err?.extensions?.code;
         if (
           code === "TOO_MANY_REQUESTS" ||
           /Too many requests/i.test(err.message)
