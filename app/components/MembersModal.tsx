@@ -79,19 +79,16 @@ export default function MembersModal({
     }
   );
 
-  const [regenerateGuestInvite, { loading: regeneratingInvite }] = useMutation(
-    REGENERATE_GUEST_INVITE,
-    {
-      onCompleted: (data: any) => {
-        const link = `${window.location.origin}${data.regenerateGuestInvite.inviteLink}`;
-        setCreatedGuestLink(link);
-        setIsAddingGuest(true); // Reuse the guest added view
-      },
-      onError: (error) => {
-        toast.error(error.message);
-      },
-    }
-  );
+  const [regenerateGuestInvite] = useMutation(REGENERATE_GUEST_INVITE, {
+    onCompleted: (data: any) => {
+      const link = `${window.location.origin}${data.regenerateGuestInvite.inviteLink}`;
+      setCreatedGuestLink(link);
+      setIsAddingGuest(true); // Reuse the guest added view
+    },
+    onError: (error) => {
+      toast.error(error.message);
+    },
+  });
 
   if (!isOpen) return null;
 
@@ -177,23 +174,31 @@ export default function MembersModal({
                   Add Guest User
                 </button>
               ) : createdGuestLink ? (
-                <div className="text-center space-y-4">
-                  <h3 className="font-bold text-gray-900">Guest QR Code</h3>
-                  {guestName && (
-                    <p className="text-lg font-semibold text-blue-600">
-                      {guestName}
-                    </p>
-                  )}
-                  <div className="bg-white p-4 rounded-xl inline-block shadow-sm">
-                    <QRCodeSVG value={createdGuestLink} size={180} />
+                <div className="text-center space-y-3">
+                  <h3 className="text-lg font-semibold text-gray-900">Guest QR Code</h3>
+                  {guestName && <p className="text-sm text-blue-600">{guestName}</p>}
+
+                  <div className="mx-auto w-fit bg-white p-4 rounded-xl shadow-sm">
+                    <QRCodeSVG value={createdGuestLink} size={200} />
                   </div>
-                  <p className="text-sm text-gray-600 break-all px-2">
-                    Scan to log in as guest
-                  </p>
-                  <button
-                    onClick={resetGuestFlow}
-                    className="text-sm text-blue-600 hover:underline font-medium"
-                  >
+
+                  <div className="flex justify-center mt-2">
+                    <button
+                      onClick={() => {
+                        if (!createdGuestLink) return;
+                        navigator.clipboard
+                          .writeText(createdGuestLink)
+                          .then(() => toast.success("Link copied"))
+                          .catch(() => toast.error("Failed to copy link"));
+                      }}
+                      className="px-6 py-2 bg-white border border-gray-200 rounded-full shadow-sm text-sm font-medium hover:bg-gray-50 cursor-pointer"
+                    >
+                      Copy link
+                    </button>
+                  </div>
+
+                  <p className="text-xs text-gray-500">Scan to log in as guest</p>
+                  <button onClick={resetGuestFlow} className="text-sm text-blue-600 hover:underline cursor-pointer">
                     Done / Add Another
                   </button>
                 </div>
