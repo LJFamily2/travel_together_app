@@ -497,8 +497,8 @@ export default function JourneyDashboard() {
         <main className="grow w-full max-w-[1440px] mx-auto p-4 md:p-8">
           <div className="bg-white rounded-[34px] p-6 md:p-10 shadow-sm min-h-[80vh]">
             <header className="mb-8 flex justify-between items-center flex-wrap gap-4 border-b border-gray-100 pb-6">
-              <div>
-                <h1 className="text-4xl font-bold mb-2 text-gray-900">
+              <div className="min-w-0">
+                <h1 className="text-2xl md:text-4xl font-bold mb-2 text-gray-900">
                   {journey.name}
                 </h1>
                 <div className="flex items-center gap-2 text-gray-500">
@@ -594,7 +594,7 @@ export default function JourneyDashboard() {
                   )}
                 </div>
               </div>
-              <div className="flex gap-3">
+              <div className="flex flex-wrap gap-3 items-center min-w-0">
                 {isLeader && (
                   <>
                     <button
@@ -639,7 +639,7 @@ export default function JourneyDashboard() {
                 </button>
                 <button
                   onClick={() => setIsSettleModalOpen(true)}
-                  className="bg-green-600 text-white px-6 py-2.5 rounded-full font-medium hover:bg-green-700 transition-colors shadow-sm cursor-pointer"
+                  className="bg-green-600 text-white px-4 md:px-6 py-2.5 rounded-full font-medium hover:bg-green-700 transition-colors shadow-sm cursor-pointer"
                 >
                   Settle Up
                 </button>
@@ -672,7 +672,7 @@ export default function JourneyDashboard() {
                       </div>
                     ));
                   }}
-                  className="bg-red-50 text-red-600 px-6 py-2.5 rounded-full font-medium hover:bg-red-100 transition-colors border border-red-100 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                  className="bg-red-50 text-red-600 px-4 md:px-6 py-2.5 rounded-full font-medium hover:bg-red-100 transition-colors border border-red-100 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                 >
                   {isLeaving ? "Leaving..." : "Leave Journey"}
                 </button>
