@@ -503,7 +503,7 @@ export default function JourneyDashboard() {
       }
       Cookies.remove("guestToken");
       await client.clearStore();
-      router.push("/");
+      router.push(status === "authenticated" ? "/dashboard" : "/");
     } catch (e) {
       toast.error("Failed to leave journey: " + (e as Error).message);
       setIsLeaving(false);

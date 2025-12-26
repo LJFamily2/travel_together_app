@@ -9,6 +9,16 @@ import Journey, { IJourney } from "../../models/Journey";
 import Expense from "../../models/Expense";
 import User from "../../models/User";
 import { notifyJourneyUpdate } from "../../utils/notifySocket";
+import { rlCreateJourney } from "../../rateLimiter";
+import { getRateLimiterKey } from "../../utils/limiterKey";
+
+type GraphQLContext = {
+  user?: { userId?: string };
+  req?: any;
+  limiters?: {
+    rlCreateJourney?: { consume: (key: string) => Promise<any> };
+  };
+};
 import {
   refreshJourneyExpiration,
   calculateJwtExpiration,
@@ -19,7 +29,7 @@ const journeyResolvers = {
     getJourneyDetails: async (
       _: unknown,
       { slug }: { slug: string },
-      context: { user?: { userId?: string } }
+      context: GraphQLContext
     ) => {
       await dbConnect();
       const userId = context?.user?.userId;
@@ -58,7 +68,7 @@ const journeyResolvers = {
     getUserJourneys: async (
       _: unknown,
       __: unknown,
-      context: { user?: { userId?: string } }
+      context: GraphQLContext
     ) => {
       await dbConnect();
       const userId = context?.user?.userId;
@@ -83,9 +93,21 @@ const journeyResolvers = {
         name: string;
         startDate?: string;
         endDate?: string;
-      }
+      },
+      context: GraphQLContext
     ) => {
       await dbConnect();
+
+      // Rate limit: per-user (if authenticated) or per-IP fallback for journey creation
+      try {
+        const limiter = context?.limiters?.rlCreateJourney ?? rlCreateJourney;
+        const key = getRateLimiterKey(context);
+        await limiter.consume(key);
+      } catch {
+        const err = new Error("Too many requests");
+        (err as any).extensions = { code: "TOO_MANY_REQUESTS" };
+        throw err;
+      }
 
       const slug = `${slugify(name, { lower: true, strict: true })}-${nanoid(
         6
@@ -140,7 +162,7 @@ const journeyResolvers = {
         journeyId,
         leaderTimezoneOffsetMinutes,
       }: { journeyId: string; leaderTimezoneOffsetMinutes?: number },
-      context: { user?: { userId?: string } }
+      context: GraphQLContext
     ) => {
       await dbConnect();
       const userId = context?.user?.userId;
@@ -260,7 +282,7 @@ const journeyResolvers = {
         name,
         password,
       }: { token: string; name?: string; password?: string },
-      context: { user?: { userId?: string } }
+      context: GraphQLContext
     ) => {
       await dbConnect();
 
@@ -351,10 +373,18 @@ const journeyResolvers = {
           throw new Error("NAME_TAKEN");
         }
 
-        user = new User({
-          name,
-          isGuest: true,
-        });
+        // Rate limit guest creation per-ip when joining via token
+        try {
+          const limiter = context?.limiters?.rlCreateJourney ?? rlCreateJourney;
+          const key = getRateLimiterKey(context);
+          await limiter.consume(key);
+        } catch {
+          const err = new Error("Too many requests");
+          (err as any).extensions = { code: "TOO_MANY_REQUESTS" };
+          throw err;
+        }
+
+        user = new User({ name, isGuest: true });
         await user.save();
         userId = user._id.toString();
       }
@@ -591,7 +621,7 @@ const journeyResolvers = {
     removeMember: async (
       _: unknown,
       { journeyId, memberId }: { journeyId: string; memberId: string },
-      context: { user?: { userId?: string } }
+      context: GraphQLContext
     ) => {
       await dbConnect();
       const currentUserId = context?.user?.userId;

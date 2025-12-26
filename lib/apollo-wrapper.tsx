@@ -2,6 +2,7 @@
 
 import React from "react";
 import { ApolloLink, HttpLink } from "@apollo/client";
+import { onError } from "@apollo/client/link/error";
 import { setContext } from "@apollo/client/link/context";
 import {
   ApolloNextAppProvider,
@@ -11,6 +12,7 @@ import {
 } from "@apollo/experimental-nextjs-app-support/ssr";
 
 import Cookies from "js-cookie";
+import toast from "react-hot-toast";
 
 function makeClient() {
   const httpLink = new HttpLink({
@@ -18,6 +20,33 @@ function makeClient() {
       typeof window === "undefined"
         ? "http://localhost:3000/api/graphql"
         : "/api/graphql",
+  });
+
+  const errorLink = onError(({ graphQLErrors, networkError }) => {
+    if (graphQLErrors && graphQLErrors.length > 0) {
+      graphQLErrors.forEach((err) => {
+        const code = (err as any).extensions?.code;
+        if (
+          code === "TOO_MANY_REQUESTS" ||
+          /Too many requests/i.test(err.message)
+        ) {
+          toast.error(
+            "Rate limit exceeded — please wait a moment and try again."
+          );
+        }
+      });
+    }
+
+    if (networkError) {
+      const ne: any = networkError as any;
+      const status =
+        ne.statusCode || ne.status || (ne.result && ne.result.status);
+      if (status === 429 || /Too many requests/i.test(ne.message || "")) {
+        toast.error(
+          "Rate limit exceeded — please wait a moment and try again."
+        );
+      }
+    }
   });
 
   const authLink = setContext((_, { headers }) => {
@@ -41,7 +70,7 @@ function makeClient() {
             }),
             httpLink,
           ])
-        : authLink.concat(httpLink),
+        : ApolloLink.from([errorLink, authLink.concat(httpLink)]),
   });
 }
 

@@ -5,8 +5,17 @@ import jwt from "jsonwebtoken";
 import mongoose from "mongoose";
 import Journey from "../../models/Journey";
 import bcrypt from "bcryptjs";
-import { notifyJourneyUpdate } from "../../utils/notifySocket";
+import { rlCreateJourney } from "../../rateLimiter";
+import { getRateLimiterKey } from "../../utils/limiterKey";
 import { calculateJwtExpiration } from "../../utils/expiration";
+
+type GraphQLContext = {
+  user?: { userId?: string };
+  req?: any;
+  limiters?: {
+    rlCreateJourney?: { consume: (key: string) => Promise<any> };
+  };
+};
 
 const userResolvers = {
   Query: {
@@ -14,11 +23,7 @@ const userResolvers = {
       await dbConnect();
       return await User.find({});
     },
-    me: async (
-      _: unknown,
-      __: unknown,
-      context: { user: { userId: string } }
-    ) => {
+    me: async (_: unknown, __: unknown, context: GraphQLContext) => {
       if (!context.user) return null;
       await dbConnect();
       return await User.findById(context.user.userId);
@@ -39,9 +44,21 @@ const userResolvers = {
     },
     joinAsGuest: async (
       _: unknown,
-      { name, journeyId }: { name: string; journeyId: string }
+      { name, journeyId }: { name: string; journeyId: string },
+      context: GraphQLContext
     ) => {
       await dbConnect();
+
+      // Rate limit guest joins per IP to prevent spam
+      try {
+        const limiter = context?.limiters?.rlCreateJourney ?? rlCreateJourney;
+        const key = getRateLimiterKey(context);
+        await limiter.consume(key);
+      } catch (e) {
+        const err = new Error("Too many requests");
+        (err as any).extensions = { code: "TOO_MANY_REQUESTS" };
+        throw err;
+      }
 
       // Check if journey exists
       const journey = await Journey.findById(journeyId).populate("members");
@@ -89,10 +106,21 @@ const userResolvers = {
     createGuestUser: async (
       _: unknown,
       { journeyId, name }: { journeyId: string; name: string },
-      context: { user?: { userId: string } }
+      context: GraphQLContext
     ) => {
       await dbConnect();
       if (!context.user?.userId) throw new Error("Unauthorized");
+
+      // Rate limit guest creation by leader user id to avoid mass guest creation
+      try {
+        const limiter = context?.limiters?.rlCreateJourney ?? rlCreateJourney;
+        const key = getRateLimiterKey(context, context.user.userId);
+        await limiter.consume(key);
+      } catch (e) {
+        const err = new Error("Too many requests");
+        (err as any).extensions = { code: "TOO_MANY_REQUESTS" };
+        throw err;
+      }
 
       const journey = await Journey.findById(journeyId);
       if (!journey) throw new Error("Journey not found");
@@ -144,7 +172,7 @@ const userResolvers = {
     regenerateGuestInvite: async (
       _: unknown,
       { journeyId, userId }: { journeyId: string; userId: string },
-      context: { user?: { userId: string } }
+      context: GraphQLContext
     ) => {
       await dbConnect();
       if (!context.user?.userId) throw new Error("Unauthorized");

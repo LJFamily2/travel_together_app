@@ -3,6 +3,8 @@ import http from "http";
 import { Server, Socket } from "socket.io";
 import dotenv from "dotenv";
 import path from "path";
+import Redis from "ioredis";
+import { RateLimiterRedis } from "rate-limiter-flexible";
 
 dotenv.config({ path: path.resolve(__dirname, "../.env") });
 
@@ -49,7 +51,25 @@ io.on("connection", (socket: Socket) => {
 
 // Webhook endpoint for Next.js to trigger updates
 app.post("/notify-update", (req: Request, res: Response) => {
-  const authHeader = req.headers["x-api-key"];
+  const authHeader = req.headers["x-api-key"] as string | undefined;
+
+  // Rate limiter setup (Redis-backed)
+  const redisUrl = process.env.REDIS_URL || "redis://127.0.0.1:6379";
+  const redisClient = new Redis(redisUrl);
+
+  const rlPerJourney = new RateLimiterRedis({
+    storeClient: redisClient,
+    points: 10,
+    duration: 60,
+    keyPrefix: "socket_rl_journey",
+  });
+
+  const rlPerKey = new RateLimiterRedis({
+    storeClient: redisClient,
+    points: 100,
+    duration: 60,
+    keyPrefix: "socket_rl_key",
+  });
 
   if (authHeader !== SOCKET_SECRET) {
     console.warn(
@@ -66,24 +86,43 @@ app.post("/notify-update", (req: Request, res: Response) => {
   }
 
   const safeId = journeyId.replace(/[^a-zA-Z0-9-_]/g, "");
-  // Broadcast to everyone in the journey room (sanitized)
-  io.to(safeId).emit("update_data");
 
-  // If no members were found in the sanitized room, attempt an emit to the raw journeyId as a fallback
-  // If we need a fallback to raw id, do that silently (no debug logs)
-  const room = io.sockets.adapter.rooms.get(safeId);
-  const memberCount = room ? room.size : 0;
-  if (memberCount === 0 && safeId !== journeyId) {
-    const rawRoom = io.sockets.adapter.rooms.get(journeyId);
-    const rawCount = rawRoom ? rawRoom.size : 0;
-    if (rawCount > 0) {
-      io.to(journeyId).emit("update_data");
+  // Apply per-key and per-journey limits
+  const apiKey = authHeader || "unknown_key";
+  (async () => {
+    try {
+      await rlPerKey.consume(`key:${apiKey}`);
+    } catch (_err) {
+      return res.status(429).json({ error: "Too many requests (api key)" });
     }
-  }
 
-  res
-    .status(200)
-    .json({ success: true, message: `Update emitted to journey ${journeyId}` });
+    try {
+      await rlPerJourney.consume(`journey:${safeId}`);
+    } catch (_err) {
+      return res.status(429).json({ error: "Too many requests (journey)" });
+    }
+
+    // Broadcast to everyone in the journey room (sanitized)
+    io.to(safeId).emit("update_data");
+
+    // If no members were found in the sanitized room, attempt an emit to the raw journeyId as a fallback
+    const room = io.sockets.adapter.rooms.get(safeId);
+    const memberCount = room ? room.size : 0;
+    if (memberCount === 0 && safeId !== journeyId) {
+      const rawRoom = io.sockets.adapter.rooms.get(journeyId);
+      const rawCount = rawRoom ? rawRoom.size : 0;
+      if (rawCount > 0) {
+        io.to(journeyId).emit("update_data");
+      }
+    }
+
+    return res
+      .status(200)
+      .json({
+        success: true,
+        message: `Update emitted to journey ${journeyId}`,
+      });
+  })();
 });
 
 const PORT = process.env.PORT || 4000;
