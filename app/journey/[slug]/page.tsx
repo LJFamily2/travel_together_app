@@ -282,11 +282,39 @@ export default function JourneyDashboard() {
     }
   }, [router, status]);
 
-  if (loading && !data) return <div className="p-8">Loading dashboard...</div>;
-  if (error)
-    return <div className="p-8 text-red-500">Error: {error.message}</div>;
+  useEffect(() => {
+    // If data finished loading but no journey found, navigate to 404
+    if (!loading && !error && data && !journey) {
+      router.replace("/404");
+    }
+  }, [loading, error, data, journey, router]);
 
-  if (!journey) return <div className="p-8">Journey not found</div>;
+  useEffect(() => {
+    // If the server returned a "Journey not found" error, go to 404
+    if (error && (error as Error).message) {
+      const msg = (error as Error).message;
+      if (msg.includes("Journey not found") || msg.includes("Not Found")) {
+        router.replace("/404");
+      }
+    }
+  }, [error, router]);
+
+  if (loading && !data) return <div className="p-8">Loading dashboard...</div>;
+
+  if (error) {
+    // If backend explicitly says journey not found, we'll redirect to the 404 page
+    if (
+      (error as Error).message &&
+      (error as Error).message.includes("Journey not found")
+    ) {
+      return null;
+    }
+    return (
+      <div className="p-8 text-red-500">Error: {(error as Error).message}</div>
+    );
+  }
+
+  if (!journey) return null;
   if (!currentUser)
     return <div className="p-8">Please join the journey first.</div>;
 
