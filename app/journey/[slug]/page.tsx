@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
 import { useState, useEffect } from "react";
@@ -132,6 +133,7 @@ interface DashboardData {
     members: {
       id: string;
       name: string;
+      isGuest?: boolean;
       bankInfo?: {
         bankInformation?: {
           name: string;
@@ -162,6 +164,7 @@ interface LeaveJourneyResponse {
     members: {
       id: string;
       name: string;
+      isGuest?: boolean;
       bankInfo?: {
         bankInformation?: {
           name: string;
@@ -455,14 +458,30 @@ export default function JourneyDashboard() {
           });
 
           if (existing && existing.getJourneyDetails) {
+            // Ensure members include `isGuest` (query expects this field)
+            const sourceMembers = Array.isArray(updatedJourney.members)
+              ? updatedJourney.members
+              : existing.getJourneyDetails.members;
+
+            const mergedMembers = sourceMembers.map((m: any) => {
+              if (typeof m.isGuest !== "undefined") return m;
+              // try to reuse value from existing cache if available
+              const existingMatch = existing.getJourneyDetails.members.find(
+                (em) => em.id === m.id
+              );
+              return {
+                ...m,
+                isGuest: existingMatch ? existingMatch.isGuest : false,
+              };
+            });
+
             const merged = {
               ...existing,
               getJourneyDetails: {
                 ...existing.getJourneyDetails,
                 ...updatedJourney,
                 expenses: existing.getJourneyDetails.expenses,
-                members:
-                  updatedJourney.members || existing.getJourneyDetails.members,
+                members: mergedMembers,
               },
             } as DashboardData;
 
