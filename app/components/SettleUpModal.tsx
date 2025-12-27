@@ -1,9 +1,12 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
 import { useState } from "react";
 import { useCurrency } from "../context/CurrencyContext";
 import { gql } from "@apollo/client";
+import { useApolloClient } from "@apollo/client/react";
 import { useMutation } from "@apollo/client/react";
+import { writeUserBankInfo } from "../../lib/apolloCache";
 import toast from "react-hot-toast";
 
 const ADD_EXPENSE = gql`
@@ -123,7 +126,73 @@ export default function SettleUpModal({
   const [recipientId, setRecipientId] = useState("");
   const [deduction, setDeduction] = useState("");
   const [reason, setReason] = useState("");
-  const [addExpense, { loading }] = useMutation(ADD_EXPENSE);
+  const client = useApolloClient();
+  const [addExpense, { loading }] = useMutation(ADD_EXPENSE, {
+    update(cache, { data }: any, { variables }) {
+      const added = data?.addExpense;
+      if (!added) return;
+      try {
+        const journeyCacheId = cache.identify({
+          __typename: "Journey",
+          id: journeyId,
+        });
+        if (!journeyCacheId) return;
+
+        const fragment = gql`
+          fragment NewExpense on Expense {
+            id
+            totalAmount
+            description
+            hasImage
+            payer {
+              id
+            }
+            splits {
+              baseAmount
+              deduction
+              reason
+              user {
+                id
+              }
+            }
+            createdAt
+          }
+        `;
+
+        const newRef = cache.writeFragment({ fragment, data: added });
+        cache.modify({
+          id: journeyCacheId,
+          fields: {
+            expenses(existing = []) {
+              return [newRef, ...existing];
+            },
+          },
+        });
+      } catch (e) {
+        try {
+          client.refetchQueries({ include: "active" });
+        } catch (_) {}
+      }
+    },
+    optimisticResponse: (vars: any) => ({
+      addExpense: {
+        __typename: "Expense",
+        id: `temp-${Date.now()}`,
+        totalAmount: vars.totalAmount,
+        description: vars.description,
+        hasImage: false,
+        payer: { __typename: "User", id: vars.payerId },
+        splits: vars.splits.map((s: any) => ({
+          __typename: "Split",
+          baseAmount: s.baseAmount,
+          deduction: s.deduction || 0,
+          reason: s.reason || "",
+          user: { __typename: "User", id: s.userId },
+        })),
+        createdAt: Date.now().toString(),
+      },
+    }),
+  });
 
   // Bank Info State
   const [showBankInfo, setShowBankInfo] = useState(false);
@@ -136,8 +205,20 @@ export default function SettleUpModal({
   const [accountName, setAccountName] = useState(
     currentUser.bankInfo?.bankInformation?.userName || ""
   );
-  const [updateBankInfo, { loading: updatingBank }] =
-    useMutation(UPDATE_BANK_INFO);
+  const [updateBankInfo, { loading: updatingBank }] = useMutation(
+    UPDATE_BANK_INFO,
+    {
+      update(cache, { data }: any) {
+        const updated = data?.updateBankInfo;
+        if (!updated) return;
+        try {
+          writeUserBankInfo(cache, updated);
+        } catch (e) {
+          // ignore cache write failures
+        }
+      },
+    }
+  );
 
   // Mutations for editing/removing deductions
   const [updateExpense] = useMutation(UPDATE_EXPENSE);

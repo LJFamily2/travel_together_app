@@ -4,6 +4,8 @@ import Image from "next/image";
 import { useState, ChangeEvent } from "react";
 import { useCurrency } from "../context/CurrencyContext";
 import { gql } from "@apollo/client";
+import { useApolloClient } from "@apollo/client/react";
+import { removeExpenseFromJourneyCache } from "../../lib/apolloCache";
 import { useMutation } from "@apollo/client/react";
 import toast from "react-hot-toast";
 
@@ -37,6 +39,7 @@ interface ActivityFeedProps {
   expenses: Expense[];
   currentUserId: string;
   members: Member[];
+  journeyId?: string;
 }
 
 const UPDATE_EXPENSE = gql`
@@ -59,6 +62,7 @@ const UPDATE_EXPENSE = gql`
       id
       totalAmount
       description
+      id
       hasImage
       payer {
         id
@@ -87,8 +91,10 @@ export default function ActivityFeed({
   expenses,
   currentUserId,
   members,
+  journeyId,
 }: ActivityFeedProps) {
   const { formatCurrency } = useCurrency();
+  const client = useApolloClient();
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
 
   // Edit Form State
@@ -108,7 +114,48 @@ export default function ActivityFeed({
   const [searchQuery, setSearchQuery] = useState("");
 
   const [updateExpense, { loading: updating }] = useMutation(UPDATE_EXPENSE);
-  const [deleteExpense, { loading: deleting }] = useMutation(DELETE_EXPENSE);
+  const [deleteExpense, { loading: deleting }] = useMutation(DELETE_EXPENSE, {
+    // Remove the expense reference from the Journey.expenses list on success
+    update(cache, { data }: any, { variables }) {
+      const deleted = data?.deleteExpense;
+      if (!deleted) return;
+      const expenseId = variables?.expenseId;
+      if (!expenseId) return;
+      try {
+        // Identify the Journey and remove the expense ref from its expenses field
+        const journeyCacheId = cache.identify({
+          __typename: "Journey",
+          id: journeyId,
+        });
+        // If journeyId was passed, update that Journey's expenses
+        if (journeyCacheId) {
+          cache.modify({
+            id: journeyCacheId,
+            fields: {
+              expenses(existingRefs = [], { readField }) {
+                return existingRefs.filter(
+                  (ref: any) => readField("id", ref) !== expenseId
+                );
+              },
+            },
+          });
+        } else {
+          // Fallback: evict the expense entity and run garbage collection
+          const expId = cache.identify({
+            __typename: "Expense",
+            id: expenseId,
+          });
+          if (expId) cache.evict({ id: expId });
+          cache.gc();
+        }
+      } catch (e) {
+        try {
+          client.refetchQueries({ include: "active" });
+        } catch (_) {}
+      }
+    },
+    optimisticResponse: { deleteExpense: true },
+  });
 
   const filteredExpenses = expenses.filter((expense) => {
     const involvesUser = expense.splits.some(

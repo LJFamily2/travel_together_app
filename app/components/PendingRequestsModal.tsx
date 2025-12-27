@@ -1,8 +1,10 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
 import { gql } from "@apollo/client";
 import { useMutation } from "@apollo/client/react";
 import toast from "react-hot-toast";
+import { updateJourneyMembers } from "../../lib/apolloCache";
 
 const APPROVE_JOIN_REQUEST = gql`
   mutation ApproveJoinRequest($journeyId: ID!, $userId: ID!) {
@@ -32,34 +34,6 @@ const REJECT_JOIN_REQUEST = gql`
   }
 `;
 
-const APPROVE_ALL_JOIN_REQUESTS = gql`
-  mutation ApproveAllJoinRequests($journeyId: ID!) {
-    approveAllJoinRequests(journeyId: $journeyId) {
-      id
-      members {
-        id
-        name
-      }
-      pendingMembers {
-        id
-        name
-      }
-    }
-  }
-`;
-
-const REJECT_ALL_JOIN_REQUESTS = gql`
-  mutation RejectAllJoinRequests($journeyId: ID!) {
-    rejectAllJoinRequests(journeyId: $journeyId) {
-      id
-      pendingMembers {
-        id
-        name
-      }
-    }
-  }
-`;
-
 interface User {
   id: string;
   name: string;
@@ -80,14 +54,42 @@ export default function PendingRequestsModal({
   journeyId,
   pendingMembers,
 }: PendingRequestsModalProps) {
-  const [approveRequest] = useMutation(APPROVE_JOIN_REQUEST);
-  const [rejectRequest] = useMutation(REJECT_JOIN_REQUEST);
+  const [approveRequest] = useMutation(APPROVE_JOIN_REQUEST, {
+    update(cache, { data }: any) {
+      const res = data?.approveJoinRequest;
+      if (!res) return;
+      try {
+        updateJourneyMembers(
+          cache,
+          journeyId,
+          res.members || [],
+          res.pendingMembers || []
+        );
+      } catch (e) {
+        try {
+          (cache as any).refetchQueries({ include: "active" });
+        } catch (_) {}
+      }
+    },
+  });
+
+  const [rejectRequest] = useMutation(REJECT_JOIN_REQUEST, {
+    update(cache, { data }: any) {
+      const res = data?.rejectJoinRequest;
+      if (!res) return;
+      try {
+        updateJourneyMembers(cache, journeyId, [], res.pendingMembers || []);
+      } catch (e) {
+        try {
+          (cache as any).refetchQueries({ include: "active" });
+        } catch (_) {}
+      }
+    },
+  });
 
   const handleApprove = async (userId: string) => {
     try {
-      await approveRequest({
-        variables: { journeyId, userId },
-      });
+      await approveRequest({ variables: { journeyId, userId } });
       toast.success("User approved");
     } catch (error) {
       toast.error("Failed to approve user");
@@ -97,9 +99,7 @@ export default function PendingRequestsModal({
 
   const handleReject = async (userId: string) => {
     try {
-      await rejectRequest({
-        variables: { journeyId, userId },
-      });
+      await rejectRequest({ variables: { journeyId, userId } });
       toast.success("User rejected");
     } catch (error) {
       toast.error("Failed to reject user");

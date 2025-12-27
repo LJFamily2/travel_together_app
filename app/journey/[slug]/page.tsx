@@ -17,6 +17,7 @@ import JourneySettingsModal from "../../components/JourneySettingsModal";
 import PendingRequestsModal from "../../components/PendingRequestsModal";
 import MembersModal from "../../components/MembersModal";
 import UserSettingsModal from "../../components/UserSettingsModal";
+import { updateJourneyMembers } from "../../../lib/apolloCache";
 import { CurrencyProvider } from "../../context/CurrencyContext";
 import { useSocket } from "../../../lib/hooks/useSocket";
 import Cookies from "js-cookie";
@@ -252,7 +253,38 @@ export default function JourneyDashboard() {
     { journeyId: string; leaderTimezoneOffsetMinutes?: number }
   >(LEAVE_JOURNEY);
 
-  const [removeMember] = useMutation(REMOVE_MEMBER);
+  const [removeMember] = useMutation(REMOVE_MEMBER, {
+    optimisticResponse: (vars: any) => {
+      const currentMembers = data?.getJourneyDetails?.members || [];
+      const pending = data?.getJourneyDetails?.pendingMembers || [];
+      const newMembers = currentMembers.filter(
+        (m: any) => m.id !== vars.memberId
+      );
+      return {
+        removeMember: {
+          id: journeyId || "",
+          members: newMembers,
+          pendingMembers: pending,
+        },
+      };
+    },
+    update(cache, { data: mutationData }: any) {
+      const updated = mutationData?.removeMember;
+      if (!updated) return;
+      try {
+        updateJourneyMembers(
+          cache,
+          updated.id,
+          updated.members || [],
+          updated.pendingMembers || []
+        );
+      } catch (e) {
+        try {
+          (cache as any).refetchQueries({ include: "active" });
+        } catch (_) {}
+      }
+    },
+  });
 
   const journey = data?.getJourneyDetails;
   const journeyId = journey?.id;
@@ -426,11 +458,26 @@ export default function JourneyDashboard() {
   const handleRemoveMember = async (memberId: string) => {
     if (!journeyId) return;
     try {
-      await removeMember({
+      const result: any = await removeMember({
         variables: { journeyId, memberId },
       });
+      const updated = result?.data?.removeMember;
+      if (updated) {
+        try {
+          const { updateJourneyMembers } = require("../../../lib/apolloCache");
+          updateJourneyMembers(
+            client.cache,
+            journeyId,
+            updated.members || [],
+            updated.pendingMembers || []
+          );
+        } catch (cacheErr) {
+          try {
+            await refetch();
+          } catch {}
+        }
+      }
       toast.success("Member removed successfully");
-      refetch();
     } catch {
       toast.error("Failed to remove member");
     }
@@ -741,6 +788,7 @@ export default function JourneyDashboard() {
               {/* Right Column: Feed */}
               <div className="lg:col-span-2">
                 <ActivityFeed
+                  journeyId={journeyId}
                   expenses={journey.expenses}
                   currentUserId={currentUser.id}
                   members={journey.members}

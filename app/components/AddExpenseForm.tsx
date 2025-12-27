@@ -3,6 +3,7 @@
 import { useState, ChangeEvent } from "react";
 import { useCurrency } from "../context/CurrencyContext";
 import { gql } from "@apollo/client";
+import { useApolloClient } from "@apollo/client/react";
 import { useMutation } from "@apollo/client/react";
 import Image from "next/image";
 import toast from "react-hot-toast";
@@ -28,6 +29,20 @@ const ADD_EXPENSE = gql`
       description
       totalAmount
       hasImage
+      payer {
+        id
+        name
+      }
+      splits {
+        baseAmount
+        deduction
+        reason
+        user {
+          id
+          name
+        }
+      }
+      createdAt
     }
   }
 `;
@@ -49,6 +64,7 @@ export default function AddExpenseForm({
   members,
 }: AddExpenseFormProps) {
   const { formatCurrency } = useCurrency();
+  const client = useApolloClient();
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
   const [imageBase64, setImageBase64] = useState<string | null>(null);
@@ -64,7 +80,96 @@ export default function AddExpenseForm({
   const [selectedMemberIds, setSelectedMemberIds] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
 
-  const [addExpense, { loading, error }] = useMutation(ADD_EXPENSE);
+  const [addExpense, { loading, error }] = useMutation(ADD_EXPENSE, {
+    // Update the normalized cache for the Journey to prepend the new expense
+    update(cache, { data }: any) {
+      const added = data?.addExpense;
+      if (!added) return;
+      try {
+        const journeyCacheId = cache.identify({
+          __typename: "Journey",
+          id: journeyId,
+        });
+        if (!journeyCacheId) return;
+
+        const fragment = gql`
+          fragment NewExpense on Expense {
+            id
+            description
+            totalAmount
+            hasImage
+            payer {
+              id
+              name
+            }
+            splits {
+              baseAmount
+              deduction
+              reason
+              user {
+                id
+                name
+              }
+            }
+            createdAt
+          }
+        `;
+
+        const newRef = cache.writeFragment({
+          fragment,
+          data: added,
+        });
+
+        cache.modify({
+          id: journeyCacheId,
+          fields: {
+            expenses(existing = []) {
+              return [newRef, ...existing];
+            },
+          },
+        });
+      } catch (e) {
+        // If cache update fails, fallback to refetch active queries
+        try {
+          client.refetchQueries({ include: "active" });
+        } catch (_) {
+          // ignore
+        }
+      }
+    },
+    // Provide a basic optimistic response for immediate UI feedback
+    optimisticResponse: (vars: any) => {
+      const tempId = `temp-${Date.now()}`;
+      const payer = members.find((m) => m.id === vars.payerId) || currentUser;
+      const splitsForOpt = vars.splits.map((s: any) => ({
+        baseAmount: s.baseAmount,
+        deduction: s.deduction || 0,
+        reason: s.reason || "",
+        user: {
+          id: s.userId || s.user?.id,
+          name:
+            members.find((mm) => mm.id === (s.userId || s.user?.id))?.name ||
+            "",
+        },
+      }));
+
+      return {
+        addExpense: {
+          __typename: "Expense",
+          id: tempId,
+          description: vars.description,
+          totalAmount: vars.totalAmount,
+          hasImage: !!vars.imageBase64,
+          payer: { __typename: "User", id: payer.id, name: payer.name },
+          splits: splitsForOpt.map((sp: any) => ({
+            __typename: "Split",
+            ...sp,
+          })),
+          createdAt: Date.now().toString(),
+        },
+      };
+    },
+  });
 
   // Filter unique members for display and logic
   const uniqueMembers = members.filter(

@@ -4,6 +4,8 @@
 import { useState } from "react";
 import { useMutation } from "@apollo/client/react";
 import { gql } from "@apollo/client";
+import { useApolloClient } from "@apollo/client/react";
+import { addMemberToJourneyCache } from "../../lib/apolloCache";
 import { QRCodeSVG } from "qrcode.react";
 import toast from "react-hot-toast";
 
@@ -62,16 +64,46 @@ export default function MembersModal({
   const [guestName, setGuestName] = useState("");
   const [createdGuestLink, setCreatedGuestLink] = useState<string | null>(null);
 
+  const client = useApolloClient();
   const [createGuestUser, { loading: creatingGuest }] = useMutation(
     CREATE_GUEST_USER,
     {
       onCompleted: (data: any) => {
         toast.success("Guest created successfully!");
-        // Construct full URL
+        const newUser = data.createGuestUser.user;
         const link = `${window.location.origin}${data.createGuestUser.inviteLink}`;
         setCreatedGuestLink(link);
-        // Keep guestName for display
-        if (onRefresh) onRefresh();
+        // Update Journey.members in cache so UI updates immediately
+        try {
+          if (journeyId && newUser) {
+            const journeyCacheId = client.cache.identify({
+              __typename: "Journey",
+              id: journeyId,
+            });
+            if (journeyCacheId) {
+              const fragment = gql`
+                fragment NewUser on User {
+                  id
+                  name
+                }
+              `;
+              const newRef = client.cache.writeFragment({
+                fragment,
+                data: newUser,
+              });
+              client.cache.modify({
+                id: journeyCacheId,
+                fields: {
+                  members(existing = []) {
+                    return [...existing, newRef];
+                  },
+                },
+              });
+            }
+          }
+        } catch (e) {
+          if (onRefresh) onRefresh();
+        }
       },
       onError: (error) => {
         toast.error(error.message);
@@ -175,8 +207,12 @@ export default function MembersModal({
                 </button>
               ) : createdGuestLink ? (
                 <div className="text-center space-y-3">
-                  <h3 className="text-lg font-semibold text-gray-900">Guest QR Code</h3>
-                  {guestName && <p className="text-sm text-blue-600">{guestName}</p>}
+                  <h3 className="text-lg font-semibold text-gray-900">
+                    Guest QR Code
+                  </h3>
+                  {guestName && (
+                    <p className="text-sm text-blue-600">{guestName}</p>
+                  )}
 
                   <div className="mx-auto w-fit bg-white p-4 rounded-xl shadow-sm">
                     <QRCodeSVG value={createdGuestLink} size={200} />
@@ -197,8 +233,13 @@ export default function MembersModal({
                     </button>
                   </div>
 
-                  <p className="text-xs text-gray-500">Scan to log in as guest</p>
-                  <button onClick={resetGuestFlow} className="text-sm text-blue-600 hover:underline cursor-pointer">
+                  <p className="text-xs text-gray-500">
+                    Scan to log in as guest
+                  </p>
+                  <button
+                    onClick={resetGuestFlow}
+                    className="text-sm text-blue-600 hover:underline cursor-pointer"
+                  >
                     Done / Add Another
                   </button>
                 </div>
