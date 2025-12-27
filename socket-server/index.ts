@@ -56,10 +56,7 @@ io.on("connection", (socket: Socket) => {
 
 // Webhook endpoint for Next.js to trigger updates
 app.post("/notify-update", (req: Request, res: Response) => {
-  // Debug log incoming headers and body
-  console.info("/notify-update called");
-  console.info("Headers:", req.headers);
-  console.info("Body:", req.body);
+
   const authHeader = req.headers["x-api-key"] as string | undefined;
 
   // Rate limiter setup (Redis-backed)
