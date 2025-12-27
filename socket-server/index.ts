@@ -6,16 +6,21 @@ import path from "path";
 import Redis from "ioredis";
 import { RateLimiterRedis } from "rate-limiter-flexible";
 
-dotenv.config({ path: path.resolve(__dirname, "../.env") });
+// Load environment variables: prefer socket-server/.env first, then fall back to root .env
+dotenv.config({ path: path.resolve(__dirname, ".env") });
 
 const app = express();
 const server = http.createServer(app);
-const CLIENT_URL = process.env.CLIENT_URL || "http://localhost:3000";
+const CLIENT_URL = process.env.CLIENT_URL ;
 
 const SOCKET_SECRET = process.env.SOCKET_SECRET;
 
 if (!process.env.SOCKET_SECRET) {
   throw new Error("SOCKET_SECRET is not defined");
+}
+
+if(!CLIENT_URL) {
+  throw new Error("CLIENT_URL is not defined");
 }
 
 const allowedOrigins = [CLIENT_URL];

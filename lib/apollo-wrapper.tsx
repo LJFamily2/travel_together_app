@@ -16,12 +16,12 @@ import Cookies from "js-cookie";
 import toast from "react-hot-toast";
 
 function makeClient() {
-  const httpLink = new HttpLink({
-    uri:
-      typeof window === "undefined"
-        ? "http://localhost:3000/api/graphql"
-        : "/api/graphql",
-  });
+const httpLink = new HttpLink({
+  uri:
+    typeof window === "undefined"
+      ? process.env.NEXT_PUBLIC_CLIENT_URL 
+      : "/api/graphql",
+});
 
   const errorLink = onError((error: any) => {
     const { graphQLErrors, networkError } = error || {};
