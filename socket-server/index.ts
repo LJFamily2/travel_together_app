@@ -11,7 +11,7 @@ dotenv.config({ path: path.resolve(__dirname, ".env") });
 
 const app = express();
 const server = http.createServer(app);
-const CLIENT_URL = process.env.CLIENT_URL ;
+const CLIENT_URL = process.env.CLIENT_URL;
 
 const SOCKET_SECRET = process.env.SOCKET_SECRET;
 
@@ -19,7 +19,7 @@ if (!process.env.SOCKET_SECRET) {
   throw new Error("SOCKET_SECRET is not defined");
 }
 
-if(!CLIENT_URL) {
+if (!CLIENT_URL) {
   throw new Error("CLIENT_URL is not defined");
 }
 
@@ -56,6 +56,10 @@ io.on("connection", (socket: Socket) => {
 
 // Webhook endpoint for Next.js to trigger updates
 app.post("/notify-update", (req: Request, res: Response) => {
+  // Debug log incoming headers and body
+  console.info("/notify-update called");
+  console.info("Headers:", req.headers);
+  console.info("Body:", req.body);
   const authHeader = req.headers["x-api-key"] as string | undefined;
 
   // Rate limiter setup (Redis-backed)
@@ -121,12 +125,10 @@ app.post("/notify-update", (req: Request, res: Response) => {
       }
     }
 
-    return res
-      .status(200)
-      .json({
-        success: true,
-        message: `Update emitted to journey ${journeyId}`,
-      });
+    return res.status(200).json({
+      success: true,
+      message: `Update emitted to journey ${journeyId}`,
+    });
   })();
 });
 
