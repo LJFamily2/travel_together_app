@@ -60,7 +60,10 @@ app.post("/notify-update", (req: Request, res: Response) => {
   const authHeader = req.headers["x-api-key"] as string | undefined;
 
   // Rate limiter setup (Redis-backed)
-  const redisUrl = process.env.REDIS_URL || "redis://127.0.0.1:6379";
+  const redisUrl = process.env.REDIS_URL;
+  if (!redisUrl) {
+    return res.status(500).json({ error: "REDIS_URL is not defined" });
+  }
   const redisClient = new Redis(redisUrl);
 
   const rlPerJourney = new RateLimiterRedis({
