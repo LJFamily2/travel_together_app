@@ -19,7 +19,7 @@ function makeClient() {
 const httpLink = new HttpLink({
   uri:
     typeof window === "undefined"
-      ? `${process.env.NEXT_PUBLIC_CLIENT_URL}/api/graphql`
+      ? `${process.env.NEXTAUTH_URL}/api/graphql`
       : "/api/graphql",
 });
 
