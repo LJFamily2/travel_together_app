@@ -226,14 +226,38 @@ const journeyResolvers = {
             : null,
         };
       } else {
+        // Prevent non-leader members from leaving early. Members may only leave
+        // if the journey has ended (`endDate` passed or `status==='complete'`) or
+        // if the leader has left (indicated by `expireAt` being set).
+        const now = new Date();
+        const journeyEnded =
+          journey.status === "complete" ||
+          (journey.endDate && now >= new Date(journey.endDate)) ||
+          Boolean(journey.expireAt);
+
+        if (!journeyEnded) {
+          throw new Error(
+            "Members cannot leave until the journey ends or the leader has left"
+          );
+        }
+
         journey.members = journey.members.filter(
           (id) => id.toString() !== userId
         );
         await journey.save();
 
+        // If the leaving user is a guest, attempt to delete their account only
+        // if they are not referenced in any expenses for this journey.
         const user = await User.findById(userId);
         if (user && user.isGuest) {
-          await User.findByIdAndDelete(userId);
+          const involved = await Expense.exists({
+            journeyId: journey._id,
+            $or: [{ payerId: userId }, { "splits.userId": userId }],
+          });
+
+          if (!involved) {
+            await User.findByIdAndDelete(userId);
+          }
         }
 
         await notifyJourneyUpdate(journey._id.toString());
