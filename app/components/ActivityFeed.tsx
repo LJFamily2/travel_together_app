@@ -2,7 +2,7 @@
 "use client";
 
 import Image from "next/image";
-import { useState, ChangeEvent } from "react";
+import { useState, ChangeEvent, useEffect } from "react";
 import { useCurrency } from "../context/CurrencyContext";
 import { gql } from "@apollo/client";
 import { useApolloClient } from "@apollo/client/react";
@@ -105,6 +105,8 @@ export default function ActivityFeed({
   const [description, setDescription] = useState("");
   const [payerId, setPayerId] = useState("");
   const [imageBase64, setImageBase64] = useState<string | null>(null);
+  // Image preview state for full-screen clickable preview
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
 
   // Split logic state
   const [splitType, setSplitType] = useState<"equal" | "separate">("equal");
@@ -337,6 +339,21 @@ export default function ActivityFeed({
       toast.error("Export failed");
     }
   };
+
+  // Close preview on Escape and prevent background scroll while open
+  useEffect(() => {
+    if (!previewImage) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setPreviewImage(null);
+    };
+    document.addEventListener("keydown", onKey);
+    const original = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = original || "";
+    };
+  }, [previewImage]);
 
   // Unique members for selection
   const uniqueMembers = members.filter(
@@ -590,12 +607,27 @@ export default function ActivityFeed({
                 </div>
                 {expense.hasImage && (
                   <div className="relative h-16 w-16">
-                    <Image
-                      src={`/api/image/${expense.id}`}
-                      alt="Receipt"
-                      fill
-                      className="object-cover rounded-xl"
-                    />
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setPreviewImage(`/api/image/${expense.id}`)
+                      }
+                      className="absolute inset-0 w-full h-full p-0 m-0 cursor-pointer"
+                      aria-label={`Open receipt for ${expense.description}`}
+                    >
+                      <Image
+                        src={`/api/image/${expense.id}`}
+                        alt="Receipt"
+                        width={64}
+                        height={64}
+                        style={{
+                          width: "64px",
+                          height: "64px",
+                          objectFit: "cover",
+                        }}
+                        className="rounded-xl cursor-pointer"
+                      />
+                    </button>
                   </div>
                 )}
 
@@ -624,6 +656,39 @@ export default function ActivityFeed({
           <p className="text-gray-500">No expenses yet.</p>
         )}
       </div>
+      {previewImage && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+          onClick={() => setPreviewImage(null)}
+          role="dialog"
+          aria-modal="true"
+        >
+          <div className="max-w-[90vw] max-h-[90vh] w-full flex items-center justify-center">
+            <div
+              className="relative overflow-auto max-w-full max-h-full bg-transparent"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setPreviewImage(null);
+                }}
+                aria-label="Close image preview"
+                className="absolute top-2 right-2 z-50 text-white bg-black/40 rounded-full p-2 cursor-pointer"
+              >
+                ✕
+              </button>
+              <img
+                src={previewImage}
+                alt="Preview large"
+                className="block max-w-none max-h-none object-contain"
+                style={{ display: "block" }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Edit Modal */}
       {editingExpense && (
@@ -876,12 +941,25 @@ export default function ActivityFeed({
                   />
                   {imageBase64 && (
                     <div className="mt-2 relative h-20 w-20">
-                      <Image
-                        src={imageBase64}
-                        alt="Preview"
-                        fill
-                        className="object-cover rounded-xl"
-                      />
+                      <button
+                        type="button"
+                        onClick={() => setPreviewImage(imageBase64)}
+                        aria-label="Open selected receipt preview"
+                        className="absolute inset-0 w-full h-full p-0 m-0"
+                      >
+                        <Image
+                          src={imageBase64}
+                          alt="Preview"
+                          width={80}
+                          height={80}
+                          style={{
+                            width: "80px",
+                            height: "80px",
+                            objectFit: "cover",
+                          }}
+                          className="rounded-xl cursor-pointer"
+                        />
+                      </button>
                     </div>
                   )}
                   {!imageBase64 && editingExpense.hasImage && (
