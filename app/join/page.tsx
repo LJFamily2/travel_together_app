@@ -6,7 +6,6 @@ import { useMutation } from "@apollo/client/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import toast from "react-hot-toast";
-import { useSocket } from "../../lib/hooks/useSocket";
 import Cookies from "js-cookie";
 
 const JOIN_JOURNEY_VIA_TOKEN = gql`
@@ -129,16 +128,7 @@ function JoinPageContent() {
     }
   }, [token, session, name, password, passwordRequired, joinJourney, router]);
 
-  // Listen for socket updates if pending
-  useSocket(
-    isPending && pendingJourneyId ? pendingJourneyId : undefined,
-    useCallback(() => {
-      if (isPending) {
-        // Retry joining when update received
-        handleJoin();
-      }
-    }, [isPending, handleJoin])
-  );
+  // (Sockets removed) Pending state remains; consider polling or manual retry
 
   // Auto-join if logged in (only if password not required)
   useEffect(() => {

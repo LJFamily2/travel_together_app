@@ -3,9 +3,7 @@ import Expense from "../lib/models/Expense";
 
 jest.mock("../lib/mongodb", () => jest.fn());
 jest.mock("../lib/models/Expense");
-jest.mock("../lib/utils/notifySocket", () => ({
-  notifyJourneyUpdate: jest.fn(),
-}));
+
 jest.mock("../lib/utils/expiration", () => ({
   refreshJourneyExpiration: jest.fn().mockResolvedValue(null),
 }));

@@ -19,7 +19,6 @@ import MembersModal from "../../components/MembersModal";
 import UserSettingsModal from "../../components/UserSettingsModal";
 import { updateJourneyMembers } from "../../../lib/apolloCache";
 import { CurrencyProvider } from "../../context/CurrencyContext";
-import { useSocket } from "../../../lib/hooks/useSocket";
 import Cookies from "js-cookie";
 
 const GENERATE_JOIN_TOKEN = gql`
@@ -289,9 +288,6 @@ export default function JourneyDashboard() {
   const journey = data?.getJourneyDetails;
   const journeyId = journey?.id;
 
-  useSocket(journeyId, () => {
-    refetch();
-  });
   const currentUser = data?.me;
   const isLeader = journey?.leader?.id === currentUser?.id;
 

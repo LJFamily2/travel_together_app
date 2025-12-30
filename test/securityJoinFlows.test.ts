@@ -13,9 +13,7 @@ jest.mock("../lib/models/User");
 jest.mock("jsonwebtoken");
 jest.mock("bcryptjs");
 jest.mock("nanoid", () => ({ nanoid: jest.fn(() => "fixed-jti") }));
-jest.mock("../lib/utils/notifySocket", () => ({
-  notifyJourneyUpdate: jest.fn(),
-}));
+
 jest.mock("../lib/utils/expiration", () => ({
   refreshJourneyExpiration: jest.fn(),
   calculateJwtExpiration: jest.fn(() => 30 * 24 * 60 * 60),
@@ -97,9 +95,6 @@ describe("Join Flow Security Tests", () => {
 
       // Reset mocks
       mockJourneyInstance.save.mockClear();
-      const notifyMock =
-        require("../lib/utils/notifySocket").notifyJourneyUpdate;
-      notifyMock.mockClear();
 
       // Mock User.findById for the second call
       (User.findById as jest.Mock).mockResolvedValue(mockUserInstance);
@@ -114,8 +109,6 @@ describe("Join Flow Security Tests", () => {
       expect(resultRetry.isPending).toBe(true);
       // Should NOT have called save (no new pending member added)
       expect(mockJourneyInstance.save).not.toHaveBeenCalled();
-      // Should NOT have notified (no update needed)
-      expect(notifyMock).not.toHaveBeenCalled();
     });
   });
 });

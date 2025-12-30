@@ -1,11 +1,9 @@
 import journeyResolvers from "../lib/graphql/resolvers/journeys";
 import Journey from "../lib/models/Journey";
-import { notifyJourneyUpdate } from "../lib/utils/notifySocket";
 
 // Mock dependencies
 jest.mock("../lib/mongodb", () => jest.fn());
 jest.mock("../lib/models/Journey");
-jest.mock("../lib/utils/notifySocket");
 jest.mock("nanoid", () => ({ nanoid: jest.fn(() => "fixed-id") }));
 
 describe("Journey Resolvers - removeMember", () => {
@@ -40,7 +38,6 @@ describe("Journey Resolvers - removeMember", () => {
     expect(Journey.findById).toHaveBeenCalledWith(mockJourneyId);
     expect(mockJourney.members).toEqual([mockLeaderId]);
     expect(mockJourney.save).toHaveBeenCalled();
-    expect(notifyJourneyUpdate).toHaveBeenCalledWith(mockJourneyId);
   });
 
   it("should throw error if requester is not leader", async () => {

@@ -2,7 +2,6 @@ import mongoose from "mongoose";
 import dbConnect from "../../mongodb";
 import Expense, { IExpense } from "../../models/Expense";
 import User from "../../models/User";
-import { notifyJourneyUpdate } from "../../utils/notifySocket";
 import { refreshJourneyExpiration } from "../../utils/expiration";
 
 interface SplitInput {
@@ -86,9 +85,6 @@ const expenseResolvers = {
       }
 
       await newExpense.save();
-
-      // Notify socket server about the update
-      await notifyJourneyUpdate(journeyId);
 
       return await newExpense.populate("payerId");
     },
@@ -185,9 +181,6 @@ const expenseResolvers = {
       // Refresh expiration on activity
       await refreshJourneyExpiration(expense.journeyId.toString());
 
-      // Notify socket server about the update
-      await notifyJourneyUpdate(expense.journeyId.toString());
-
       return await expense.populate("payerId");
     },
     deleteExpense: async (
@@ -212,7 +205,6 @@ const expenseResolvers = {
       // Refresh expiration on activity
       await refreshJourneyExpiration(journeyId);
 
-      await notifyJourneyUpdate(journeyId);
       return true;
     },
   },

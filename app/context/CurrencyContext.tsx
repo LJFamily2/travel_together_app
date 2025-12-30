@@ -21,15 +21,17 @@ const CurrencyContext = createContext<CurrencyContextType | undefined>(
 );
 
 export function CurrencyProvider({ children }: { children: ReactNode }) {
-  const [formatPreference, setFormatPreference] =
-    useState<CurrencyFormat>("US");
-
-  useEffect(() => {
-    const stored = localStorage.getItem("currencyFormat");
-    if (stored === "US" || stored === "EU") {
-      setFormatPreference(stored);
+  const [formatPreference, setFormatPreference] = useState<CurrencyFormat>(
+    () => {
+      if (typeof window !== "undefined") {
+        const stored = localStorage.getItem("currencyFormat");
+        if (stored === "US" || stored === "EU") {
+          return stored;
+        }
+      }
+      return "US";
     }
-  }, []);
+  );
 
   const updatePreference = (format: CurrencyFormat) => {
     setFormatPreference(format);

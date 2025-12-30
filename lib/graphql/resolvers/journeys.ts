@@ -8,7 +8,6 @@ import dbConnect from "../../mongodb";
 import Journey, { IJourney } from "../../models/Journey";
 import Expense from "../../models/Expense";
 import User from "../../models/User";
-import { notifyJourneyUpdate } from "../../utils/notifySocket";
 import { rlCreateJourney } from "../../rateLimiter";
 import { getRateLimiterKey } from "../../utils/limiterKey";
 
@@ -152,7 +151,6 @@ const journeyResolvers = {
         journey.members.push(new mongoose.Types.ObjectId(userId));
         await journey.save();
         await refreshJourneyExpiration(journeyId);
-        await notifyJourneyUpdate(journey._id.toString());
       }
       return await journey.populate(["leaderId", "members"]);
     },
@@ -212,7 +210,6 @@ const journeyResolvers = {
           );
         }
 
-        await notifyJourneyUpdate(journey._id.toString());
         const updated = await Journey.findById(journeyId)
           .populate("leaderId")
           .populate("members");
@@ -260,7 +257,6 @@ const journeyResolvers = {
           }
         }
 
-        await notifyJourneyUpdate(journey._id.toString());
         const updated = await Journey.findById(journeyId)
           .populate("leaderId")
           .populate("members");
@@ -443,7 +439,6 @@ const journeyResolvers = {
         if (!isPending) {
           journey.pendingMembers.push(new mongoose.Types.ObjectId(userId!));
           await journey.save();
-          await notifyJourneyUpdate(journey._id.toString());
         }
 
         // Generate token for pending user so they have an identity
@@ -469,7 +464,6 @@ const journeyResolvers = {
       // Add to members
       journey.members.push(new mongoose.Types.ObjectId(userId!));
       await journey.save();
-      await notifyJourneyUpdate(journey._id.toString());
 
       if (!process.env.JWT_SECRET) {
         throw new Error("JWT_SECRET is not defined");
@@ -507,7 +501,6 @@ const journeyResolvers = {
         journey.password = undefined;
       }
       await journey.save();
-      await notifyJourneyUpdate(journeyId);
       return true;
     },
     toggleApprovalRequirement: async (
@@ -523,7 +516,6 @@ const journeyResolvers = {
 
       journey.requireApproval = requireApproval;
       await journey.save();
-      await notifyJourneyUpdate(journeyId);
       return journey;
     },
     toggleJourneyLock: async (
@@ -536,7 +528,6 @@ const journeyResolvers = {
 
       journey.isLocked = isLocked;
       await journey.save();
-      await notifyJourneyUpdate(journeyId);
       return journey;
     },
     approveJoinRequest: async (
@@ -567,7 +558,6 @@ const journeyResolvers = {
       }
 
       await journey.save();
-      await notifyJourneyUpdate(journeyId);
       return await journey.populate(["members", "pendingMembers"]);
     },
     rejectJoinRequest: async (
@@ -589,7 +579,6 @@ const journeyResolvers = {
       }
 
       await journey.save();
-      await notifyJourneyUpdate(journeyId);
       return await journey.populate("pendingMembers");
     },
     approveAllJoinRequests: async (
@@ -612,7 +601,6 @@ const journeyResolvers = {
       journey.pendingMembers = [];
 
       await journey.save();
-      await notifyJourneyUpdate(journeyId);
       return await journey.populate(["members", "pendingMembers"]);
     },
     rejectAllJoinRequests: async (
@@ -638,7 +626,6 @@ const journeyResolvers = {
       journey.pendingMembers = [];
 
       await journey.save();
-      await notifyJourneyUpdate(journeyId);
       return await journey.populate("pendingMembers");
     },
 
@@ -676,7 +663,6 @@ const journeyResolvers = {
       // Let's stick to just removing from members list for now.
 
       await journey.save();
-      await notifyJourneyUpdate(journeyId);
 
       return await journey.populate(["members", "pendingMembers"]);
     },
