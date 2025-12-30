@@ -789,6 +789,7 @@ export default function JourneyDashboard() {
               <div className="lg:col-span-2">
                 <ActivityFeed
                   journeyId={journeyId}
+                  journeyName={journey.name}
                   expenses={journey.expenses}
                   currentUserId={currentUser.id}
                   members={journey.members}

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
 import Image from "next/image";
@@ -40,6 +41,7 @@ interface ActivityFeedProps {
   currentUserId: string;
   members: Member[];
   journeyId?: string;
+  journeyName?: string;
 }
 
 const UPDATE_EXPENSE = gql`
@@ -92,6 +94,7 @@ export default function ActivityFeed({
   currentUserId,
   members,
   journeyId,
+  journeyName,
 }: ActivityFeedProps) {
   const { formatCurrency } = useCurrency();
   const client = useApolloClient();
@@ -183,13 +186,19 @@ export default function ActivityFeed({
 
       const wb = XLSX.utils.book_new();
 
-      // All expenses sheet
+      // All expenses sheet (no ID column). Include a UserAmount column for the exporting user.
       const allRows = expenses.map((exp) => {
         const involves =
           exp.splits.some((s) => s.user.id === currentUserId) ||
           (exp.payer.id && exp.payer.id === currentUserId);
+        const mySplit = exp.splits.find((s) => s.user.id === currentUserId);
+        const userAmount = mySplit
+          ? +(mySplit.baseAmount - (mySplit.deduction || 0))
+          : exp.payer.id === currentUserId
+          ? 0
+          : 0;
+
         return {
-          ID: exp.id,
           Description: exp.description,
           Payer: exp.payer.name,
           Total: exp.totalAmount,
@@ -202,18 +211,37 @@ export default function ActivityFeed({
                 )})`
             )
             .join(", "),
-          InvolvesUser: involves ? "YES" : "",
-        };
+          UserAmount: userAmount,
+          // internal flag for styling
+          _involves: involves,
+        } as any;
       });
 
-      const wsAll = XLSX.utils.json_to_sheet(allRows);
+      // Totals
+      const totalSum = allRows.reduce((sum, r) => sum + (r.Total || 0), 0);
+      const userSum = allRows.reduce((sum, r) => sum + (r.UserAmount || 0), 0);
 
-      // Try to highlight rows where InvolvesUser === 'YES'
+      const allRowsForSheet = allRows.map(
+        ({ _involves, ...rest }: any) => rest
+      );
+      allRowsForSheet.push({
+        Description: "TOTAL",
+        Payer: "",
+        Total: totalSum,
+        CreatedAt: "",
+        Splits: "",
+        UserAmount: userSum,
+      });
+
+      const wsAll = XLSX.utils.json_to_sheet(allRowsForSheet);
+
+      // Highlight rows where the original _involves flag is true
       try {
         const range = XLSX.utils.decode_range(wsAll["!ref"] || "A1");
-        for (let R = range.s.r + 1; R <= range.e.r; ++R) {
-          const involvesCell = XLSX.utils.encode_cell({ r: R, c: 6 }); // column G (0-based)
-          if (wsAll[involvesCell] && wsAll[involvesCell].v === "YES") {
+        for (let idx = 0; idx < allRows.length; idx++) {
+          const involves = allRows[idx]._involves;
+          const R = range.s.r + 1 + idx; // row index for that expense
+          if (involves) {
             for (let C = range.s.c; C <= range.e.c; ++C) {
               const addr = XLSX.utils.encode_cell({ r: R, c: C });
               wsAll[addr] = wsAll[addr] || { t: "s", v: "" };
@@ -226,38 +254,82 @@ export default function ActivityFeed({
           }
         }
       } catch (e) {
-        // non-fatal, styling might not be supported in all environments
+        // non-fatal
       }
 
       XLSX.utils.book_append_sheet(wb, wsAll, "All Expenses");
 
-      // User-specific sheet
-      const userRows = expenses
-        .filter(
-          (exp) =>
-            exp.splits.some((s) => s.user.id === currentUserId) ||
-            (exp.payer.id && exp.payer.id === currentUserId)
-        )
-        .map((exp) => ({
-          ID: exp.id,
-          Description: exp.description,
-          Payer: exp.payer.name,
-          Total: exp.totalAmount,
-          CreatedAt: new Date(parseInt(exp.createdAt)).toLocaleString(),
-          Splits: exp.splits
-            .map(
-              (s) =>
-                `${s.user.name} (${(s.baseAmount - (s.deduction || 0)).toFixed(
-                  2
-                )})`
-            )
-            .join(", "),
-        }));
+      // Detail sheet: Others Owe You (list each split where you are the payer and others owe you)
+      const othersOweYouRows: any[] = [];
+      expenses.forEach((exp) => {
+        if (exp.payer.id === currentUserId) {
+          exp.splits.forEach((s) => {
+            if (s.user.id !== currentUserId) {
+              const amt = +(s.baseAmount - (s.deduction || 0));
+              if (amt > 0) {
+                othersOweYouRows.push({
+                  Description: exp.description,
+                  OwedBy: s.user.name,
+                  OwedAmount: amt,
+                  ExpenseTotal: exp.totalAmount,
+                  CreatedAt: new Date(parseInt(exp.createdAt)).toLocaleString(),
+                });
+              }
+            }
+          });
+        }
+      });
+      const totalOthersOweYou = othersOweYouRows.reduce(
+        (s, r) => s + (r.OwedAmount || 0),
+        0
+      );
+      othersOweYouRows.push({
+        Description: "TOTAL",
+        OwedBy: "",
+        OwedAmount: totalOthersOweYou,
+        ExpenseTotal: "",
+        CreatedAt: "",
+      });
+      const wsOthers = XLSX.utils.json_to_sheet(othersOweYouRows);
+      XLSX.utils.book_append_sheet(wb, wsOthers, "Others Owe You");
 
-      const wsUser = XLSX.utils.json_to_sheet(userRows);
-      XLSX.utils.book_append_sheet(wb, wsUser, `${userName} Expenses`);
+      // Detail sheet: You Owe Others (list each split where you owe someone else)
+      const youOweOthersRows: any[] = [];
+      expenses.forEach((exp) => {
+        if (exp.payer.id !== currentUserId) {
+          const mySplit = exp.splits.find((s) => s.user.id === currentUserId);
+          if (mySplit) {
+            const amt = +(mySplit.baseAmount - (mySplit.deduction || 0));
+            if (amt > 0) {
+              youOweOthersRows.push({
+                Description: exp.description,
+                Payer: exp.payer.name,
+                YourAmount: amt,
+                ExpenseTotal: exp.totalAmount,
+                CreatedAt: new Date(parseInt(exp.createdAt)).toLocaleString(),
+              });
+            }
+          }
+        }
+      });
+      const totalYouOweOthers = youOweOthersRows.reduce(
+        (s, r) => s + (r.YourAmount || 0),
+        0
+      );
+      youOweOthersRows.push({
+        Description: "TOTAL",
+        Payer: "",
+        YourAmount: totalYouOweOthers,
+        ExpenseTotal: "",
+        CreatedAt: "",
+      });
+      const wsYouOwe = XLSX.utils.json_to_sheet(youOweOthersRows);
+      XLSX.utils.book_append_sheet(wb, wsYouOwe, "You Owe Others");
 
-      const fileName = `${userName}-journey-${journeyId || "export"}.xlsx`;
+      const dateStr = new Date().toISOString().slice(0, 10);
+      const rawName = journeyName || journeyId || "journey";
+      const safeJourney = String(rawName).replace(/[^a-zA-Z0-9-_]/g, "_");
+      const fileName = `${safeJourney}_${dateStr}_Expense_Summary.xlsx`;
       XLSX.writeFile(wb, fileName, { bookType: "xlsx", cellStyles: true });
       toast.success("Exported to Excel");
     } catch (err) {
