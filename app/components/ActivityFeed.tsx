@@ -158,9 +158,9 @@ export default function ActivityFeed({
   });
 
   const filteredExpenses = expenses.filter((expense) => {
-    const involvesUser = expense.splits.some(
-      (s) => s.user.id === currentUserId
-    );
+    const involvesUser =
+      expense.splits.some((s) => s.user.id === currentUserId) ||
+      (expense.payer.id && expense.payer.id === currentUserId);
     const isDeduction =
       expense.splits.some((s) => s.baseAmount === 0 && s.deduction > 0) ||
       expense.description.toLowerCase().startsWith("deduction") ||
@@ -173,6 +173,98 @@ export default function ActivityFeed({
     (sum, expense) => sum + expense.totalAmount,
     0
   );
+
+  const exportToExcel = async () => {
+    try {
+      const XLSX = await import("xlsx");
+
+      const currentUser = members.find((m) => m.id === currentUserId);
+      const userName = currentUser?.name || currentUserId;
+
+      const wb = XLSX.utils.book_new();
+
+      // All expenses sheet
+      const allRows = expenses.map((exp) => {
+        const involves =
+          exp.splits.some((s) => s.user.id === currentUserId) ||
+          (exp.payer.id && exp.payer.id === currentUserId);
+        return {
+          ID: exp.id,
+          Description: exp.description,
+          Payer: exp.payer.name,
+          Total: exp.totalAmount,
+          CreatedAt: new Date(parseInt(exp.createdAt)).toLocaleString(),
+          Splits: exp.splits
+            .map(
+              (s) =>
+                `${s.user.name} (${(s.baseAmount - (s.deduction || 0)).toFixed(
+                  2
+                )})`
+            )
+            .join(", "),
+          InvolvesUser: involves ? "YES" : "",
+        };
+      });
+
+      const wsAll = XLSX.utils.json_to_sheet(allRows);
+
+      // Try to highlight rows where InvolvesUser === 'YES'
+      try {
+        const range = XLSX.utils.decode_range(wsAll["!ref"] || "A1");
+        for (let R = range.s.r + 1; R <= range.e.r; ++R) {
+          const involvesCell = XLSX.utils.encode_cell({ r: R, c: 6 }); // column G (0-based)
+          if (wsAll[involvesCell] && wsAll[involvesCell].v === "YES") {
+            for (let C = range.s.c; C <= range.e.c; ++C) {
+              const addr = XLSX.utils.encode_cell({ r: R, c: C });
+              wsAll[addr] = wsAll[addr] || { t: "s", v: "" };
+              wsAll[addr].s = wsAll[addr].s || {};
+              wsAll[addr].s.fill = {
+                patternType: "solid",
+                fgColor: { rgb: "FFF7C6" },
+              };
+            }
+          }
+        }
+      } catch (e) {
+        // non-fatal, styling might not be supported in all environments
+      }
+
+      XLSX.utils.book_append_sheet(wb, wsAll, "All Expenses");
+
+      // User-specific sheet
+      const userRows = expenses
+        .filter(
+          (exp) =>
+            exp.splits.some((s) => s.user.id === currentUserId) ||
+            (exp.payer.id && exp.payer.id === currentUserId)
+        )
+        .map((exp) => ({
+          ID: exp.id,
+          Description: exp.description,
+          Payer: exp.payer.name,
+          Total: exp.totalAmount,
+          CreatedAt: new Date(parseInt(exp.createdAt)).toLocaleString(),
+          Splits: exp.splits
+            .map(
+              (s) =>
+                `${s.user.name} (${(s.baseAmount - (s.deduction || 0)).toFixed(
+                  2
+                )})`
+            )
+            .join(", "),
+        }));
+
+      const wsUser = XLSX.utils.json_to_sheet(userRows);
+      XLSX.utils.book_append_sheet(wb, wsUser, `${userName} Expenses`);
+
+      const fileName = `${userName}-journey-${journeyId || "export"}.xlsx`;
+      XLSX.writeFile(wb, fileName, { bookType: "xlsx", cellStyles: true });
+      toast.success("Exported to Excel");
+    } catch (err) {
+      console.error("Export failed:", err);
+      toast.error("Export failed");
+    }
+  };
 
   // Unique members for selection
   const uniqueMembers = members.filter(
@@ -371,9 +463,17 @@ export default function ActivityFeed({
     <div className="mt-6">
       <div className="flex justify-between items-center mb-4">
         <h3 className="text-lg font-bold">Activity Feed</h3>
-        <span className="font-semibold text-gray-700">
-          Total: ${formatCurrency(totalInvolvedAmount)}
-        </span>
+        <div className="flex items-center gap-3">
+          <span className="font-semibold text-gray-700">
+            Total: ${formatCurrency(totalInvolvedAmount)}
+          </span>
+          <button
+            onClick={exportToExcel}
+            className="px-3 py-1 bg-gray-100 rounded-full hover:bg-gray-200 text-sm transition-colors cursor-pointer"
+          >
+            Export
+          </button>
+        </div>
       </div>
       <div className="space-y-4">
         {filteredExpenses.map((expense) => {
