@@ -116,7 +116,23 @@ export default function ActivityFeed({
 
   const [isAllSelected, setIsAllSelected] = useState(true);
   const [selectedMemberIds, setSelectedMemberIds] = useState<string[]>([]);
-  const [searchQuery, setSearchQuery] = useState("");
+  // Search for members inside edit UI
+  const [memberSearchQuery, setMemberSearchQuery] = useState("");
+  // Activity feed search (search by payer)
+  const [activitySearch, setActivitySearch] = useState("");
+  const [debouncedActivitySearch, setDebouncedActivitySearch] = useState("");
+  const [payerFilter, setPayerFilter] = useState("");
+
+  // Normalize strings for search: remove diacritics, collapse whitespace, lower-case
+  const normalizeString = (s: string) =>
+    s
+      .normalize("NFD")
+      .replace(/\p{Diacritic}/gu, "")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^\p{Letter}\p{Number}\s]/gu, " ")
+      .replace(/\s+/g, " ")
+      .trim()
+      .toLowerCase();
 
   const [updateExpense, { loading: updating }] = useMutation(UPDATE_EXPENSE);
   const [deleteExpense, { loading: deleting }] = useMutation(DELETE_EXPENSE, {
@@ -174,6 +190,40 @@ export default function ActivityFeed({
     return involvesUser && !isDeduction;
   });
 
+  // Debounce activity search input
+  useEffect(() => {
+    const t = setTimeout(
+      () => setDebouncedActivitySearch(normalizeString(activitySearch || "")),
+      300
+    );
+    return () => clearTimeout(t);
+  }, [activitySearch]);
+
+  // Build unique payer list from filteredExpenses (only payers who paid for the current user)
+  const uniquePayers = filteredExpenses
+    .map((e) => e.payer)
+    .filter(
+      (p, idx, arr) =>
+        arr.findIndex((x) => (x.id || x.name) === (p.id || p.name)) === idx
+    );
+
+  // Apply description search and payer filter to the already filtered expenses
+  const visibleExpenses = filteredExpenses.filter((expense) => {
+    if (
+      debouncedActivitySearch &&
+      !normalizeString(expense.description || "").includes(
+        debouncedActivitySearch
+      )
+    )
+      return false;
+    if (payerFilter) {
+      const matchesId = expense.payer.id && expense.payer.id === payerFilter;
+      const matchesName = expense.payer.name === payerFilter;
+      if (!matchesId && !matchesName) return false;
+    }
+    return true;
+  });
+
   const totalInvolvedAmount = filteredExpenses.reduce(
     (sum, expense) => sum + expense.totalAmount,
     0
@@ -182,9 +232,6 @@ export default function ActivityFeed({
   const exportToExcel = async () => {
     try {
       const XLSX = await import("xlsx");
-
-      const currentUser = members.find((m) => m.id === currentUserId);
-      const userName = currentUser?.name || currentUserId;
 
       const wb = XLSX.utils.book_new();
 
@@ -564,8 +611,30 @@ export default function ActivityFeed({
           </button>
         </div>
       </div>
+      <div className="flex items-center justify-between mb-2 gap-4">
+        <input
+          type="text"
+          placeholder="Search description..."
+          value={activitySearch}
+          onChange={(e) => setActivitySearch(e.target.value)}
+          className="flex-1 p-3 border border-gray-200 rounded-xl bg-gray-50 focus:bg-white transition-colors text-sm"
+        />
+
+        <select
+          value={payerFilter}
+          onChange={(e) => setPayerFilter(e.target.value)}
+          className="p-3 border border-gray-200 rounded-xl bg-white text-sm cursor-pointer"
+        >
+          <option value="">All payers</option>
+          {uniquePayers.map((p) => (
+            <option key={p.id || p.name} value={p.id || p.name}>
+              {p.name}
+            </option>
+          ))}
+        </select>
+      </div>
       <div className="space-y-4">
-        {filteredExpenses.map((expense) => {
+        {visibleExpenses.map((expense) => {
           const mySplit = expense.splits.find(
             (s) => s.user.id === currentUserId
           );
@@ -805,14 +874,16 @@ export default function ActivityFeed({
                             type="text"
                             placeholder="Search members..."
                             className="w-full p-2 mb-2 border border-gray-200 rounded-lg text-sm bg-gray-50"
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
+                            value={memberSearchQuery}
+                            onChange={(e) =>
+                              setMemberSearchQuery(e.target.value)
+                            }
                           />
                           {uniqueMembers
                             .filter((m) =>
-                              m.name
-                                .toLowerCase()
-                                .includes(searchQuery.toLowerCase())
+                              normalizeString(m.name || "").includes(
+                                normalizeString(memberSearchQuery || "")
+                              )
                             )
                             .map((member) => (
                               <div
