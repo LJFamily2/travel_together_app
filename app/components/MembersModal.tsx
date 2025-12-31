@@ -35,6 +35,10 @@ interface Member {
   name: string;
   email?: string;
   isGuest?: boolean;
+  // Optional bank info if available from parent or fetched via `onShowBankInfo`
+  bankName?: string;
+  accountLast4?: string;
+  iban?: string;
 }
 
 interface MembersModalProps {
@@ -46,6 +50,13 @@ interface MembersModalProps {
   onRemoveMember?: (memberId: string) => void;
   journeyId?: string;
   onRefresh?: () => void;
+  // Optional callback to fetch bank info for a user. Should return an object
+  // like { bankName, accountLast4, iban } or null if not available.
+  onShowBankInfo?: (memberId: string) => Promise<{
+    bankName?: string;
+    accountLast4?: string;
+    iban?: string;
+  } | null>;
 }
 
 export default function MembersModal({
@@ -57,12 +68,21 @@ export default function MembersModal({
   onRemoveMember,
   journeyId,
   onRefresh,
+  onShowBankInfo,
 }: MembersModalProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [confirmRemoveId, setConfirmRemoveId] = useState<string | null>(null);
   const [isAddingGuest, setIsAddingGuest] = useState(false);
   const [guestName, setGuestName] = useState("");
   const [createdGuestLink, setCreatedGuestLink] = useState<string | null>(null);
+  const [bankInfoMap, setBankInfoMap] = useState<
+    Record<
+      string,
+      { bankName?: string; accountLast4?: string; iban?: string } | null
+    >
+  >({});
+  const [bankLoadingId, setBankLoadingId] = useState<string | null>(null);
+  const [showBankId, setShowBankId] = useState<string | null>(null);
 
   const client = useApolloClient();
   const [createGuestUser, { loading: creatingGuest }] = useMutation(
@@ -101,7 +121,7 @@ export default function MembersModal({
               });
             }
           }
-        } catch (e) {
+        } catch {
           if (onRefresh) onRefresh();
         }
       },
@@ -143,9 +163,72 @@ export default function MembersModal({
     setGuestName("");
   };
 
+  const BankIcon = ({ spin = false }: { spin?: boolean }) => (
+    <svg
+      className={`w-5 h-5 ${spin ? "animate-spin" : ""}`}
+      fill="none"
+      stroke="currentColor"
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+    >
+      <rect
+        x="2"
+        y="5"
+        width="20"
+        height="14"
+        rx="2"
+        ry="2"
+        strokeWidth={2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="M2 10h20"
+      />
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="M7 16h.01"
+      />
+    </svg>
+  );
+
+  const renderBankInfo = (
+    info: { bankName?: string; accountLast4?: string; iban?: string } | null
+  ) => {
+    if (info === null) return <div>No bank information available.</div>;
+    if (!info) return <div>Loading bank information…</div>;
+    return (
+      <div className="space-y-1">
+        {info.bankName && (
+          <div>
+            <strong>Bank:</strong> {info.bankName}
+          </div>
+        )}
+        {info.accountLast4 && (
+          <div>
+            <strong>Account:</strong> ****{info.accountLast4}
+          </div>
+        )}
+        {info.iban && (
+          <div>
+            <strong>IBAN:</strong> {info.iban}
+          </div>
+        )}
+      </div>
+    );
+  };
+
   const filteredMembers = members.filter((member) =>
     member.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  const currentUserIsMember =
+    !!currentUserId && members.some((m) => m.id === currentUserId);
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
@@ -307,92 +390,155 @@ export default function MembersModal({
               </li>
             ) : (
               filteredMembers.map((member) => (
-                <li
-                  key={member.id}
-                  className="flex items-center justify-between p-3 bg-gray-50 rounded-2xl border border-gray-100"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-white border border-gray-200 rounded-full flex items-center justify-center text-gray-700 font-bold shadow-sm shrink-0">
-                      {member.name.charAt(0).toUpperCase()}
-                    </div>
-                    <div className="min-w-0">
-                      <p className="font-semibold text-gray-900 truncate">
-                        {member.name}
-                        {member.id === currentUserId && " (You)"}
-                      </p>
-                      {member.email && (
-                        <p className="text-xs text-gray-500 truncate">
-                          {member.email}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                  {isLeader &&
-                    member.id !== currentUserId &&
-                    onRemoveMember &&
-                    (confirmRemoveId === member.id ? (
-                      <div className="flex items-center gap-2 animate-in fade-in slide-in-from-right-4 duration-200">
-                        <button
-                          onClick={() => {
-                            onRemoveMember(member.id);
-                            setConfirmRemoveId(null);
-                          }}
-                          className="bg-red-500 text-white px-3 py-1.5 rounded-full text-xs font-bold hover:bg-red-600 transition-colors cursor-pointer"
-                        >
-                          Confirm
-                        </button>
-                        <button
-                          onClick={() => setConfirmRemoveId(null)}
-                          className="bg-gray-200 text-gray-600 px-3 py-1.5 rounded-full text-xs font-bold hover:bg-gray-300 transition-colors cursor-pointer"
-                        >
-                          Cancel
-                        </button>
+                <>
+                  <li
+                    key={member.id}
+                    className="flex items-center justify-between p-3 bg-gray-50 rounded-2xl border border-gray-100"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-white border border-gray-200 rounded-full flex items-center justify-center text-gray-700 font-bold shadow-sm shrink-0">
+                        {member.name.charAt(0).toUpperCase()}
                       </div>
-                    ) : (
+                      <div className="min-w-0">
+                        <p className="font-semibold text-gray-900 truncate">
+                          {member.name}
+                          {member.id === currentUserId && " (You)"}
+                        </p>
+                        {member.email && (
+                          <p className="text-xs text-gray-500 truncate">
+                            {member.email}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                    {member.id !== currentUserId && (
                       <div className="flex items-center gap-1">
-                        {member.isGuest && (
+                        {/* Show Bank button - visible to any member of the journey */}
+                        {(isLeader || currentUserIsMember) && (
                           <button
-                            onClick={() => handleShowQr(member.id)}
-                            className="text-blue-500 hover:bg-blue-50 p-2 rounded-full transition-colors cursor-pointer"
-                            title="Show QR Code"
+                            onClick={async () => {
+                              if (showBankId === member.id) {
+                                setShowBankId(null);
+                                return;
+                              }
+                              // If we already have cached info, just show it
+                              if (bankInfoMap[member.id]) {
+                                setShowBankId(member.id);
+                                return;
+                              }
+                              if (onShowBankInfo) {
+                                try {
+                                  setBankLoadingId(member.id);
+                                  const info = await onShowBankInfo(member.id);
+                                  setBankInfoMap((m) => ({
+                                    ...m,
+                                    [member.id]: info,
+                                  }));
+                                  setShowBankId(member.id);
+                                } catch (e) {
+                                  setBankInfoMap((m) => ({
+                                    ...m,
+                                    [member.id]: null,
+                                  }));
+                                  setShowBankId(member.id);
+                                } finally {
+                                  setBankLoadingId(null);
+                                }
+                              } else {
+                                // No fetcher provided — show any inline bank info or a placeholder
+                                setBankInfoMap((m) => ({
+                                  ...m,
+                                  [member.id]: {
+                                    bankName: member.bankName,
+                                    accountLast4: member.accountLast4,
+                                    iban: member.iban,
+                                  },
+                                }));
+                                setShowBankId(member.id);
+                              }
+                            }}
+                            title="Show bank info"
+                            className="text-green-600 hover:bg-green-50 p-2 rounded-full transition-colors cursor-pointer"
                           >
-                            <svg
-                              className="w-5 h-5"
-                              fill="none"
-                              stroke="currentColor"
-                              viewBox="0 0 24 24"
-                            >
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth={2}
-                                d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"
-                              />
-                            </svg>
+                            <BankIcon spin={bankLoadingId === member.id} />
                           </button>
                         )}
-                        <button
-                          onClick={() => setConfirmRemoveId(member.id)}
-                          className="text-red-500 hover:bg-red-50 p-2 rounded-full transition-colors cursor-pointer"
-                          title="Remove member"
-                        >
-                          <svg
-                            className="w-5 h-5"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                            />
-                          </svg>
-                        </button>
+
+                        {/* Show QR to members for guest users */}
+                        {member.isGuest &&
+                          (isLeader || currentUserIsMember) && (
+                            <button
+                              onClick={() => handleShowQr(member.id)}
+                              className="text-blue-500 hover:bg-blue-50 p-2 rounded-full transition-colors cursor-pointer"
+                              title="Show QR Code"
+                            >
+                              <svg
+                                className="w-5 h-5"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2}
+                                  d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"
+                                />
+                              </svg>
+                            </button>
+                          )}
+
+                        {/* Remove controls only for leaders */}
+                        {isLeader &&
+                          onRemoveMember &&
+                          (confirmRemoveId === member.id ? (
+                            <div className="flex items-center gap-2 animate-in fade-in slide-in-from-right-4 duration-200">
+                              <button
+                                onClick={() => {
+                                  onRemoveMember(member.id);
+                                  setConfirmRemoveId(null);
+                                }}
+                                className="bg-red-500 text-white px-3 py-1.5 rounded-full text-xs font-bold hover:bg-red-600 transition-colors cursor-pointer"
+                              >
+                                Confirm
+                              </button>
+                              <button
+                                onClick={() => setConfirmRemoveId(null)}
+                                className="bg-gray-200 text-gray-600 px-3 py-1.5 rounded-full text-xs font-bold hover:bg-gray-300 transition-colors cursor-pointer"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => setConfirmRemoveId(member.id)}
+                              className="text-red-500 hover:bg-red-50 p-2 rounded-full transition-colors cursor-pointer"
+                              title="Remove member"
+                            >
+                              <svg
+                                className="w-5 h-5"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2}
+                                  d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                                />
+                              </svg>
+                            </button>
+                          ))}
                       </div>
-                    ))}
-                </li>
+                    )}
+                  </li>
+                  {showBankId === member.id && (
+                    <div className="mt-2 px-4 py-3 bg-white border border-gray-100 rounded-2xl text-sm text-gray-700 w-full">
+                      {renderBankInfo(bankInfoMap[member.id] ?? null)}
+                    </div>
+                  )}
+                </>
               ))
             )}
           </ul>
