@@ -20,7 +20,7 @@ export const notifyJourneyUpdate = (
   journeyId: string
 ): Promise<NotifyResult> => {
   const socketUrl =
-    process.env.NEXT_PUBLIC_SOCKET_URL || "http://127.0.0.1:4000";
+    process.env.NEXT_PUBLIC_SOCKET_URL ;
   const socketSecret = process.env.SOCKET_SECRET;
   if (!socketSecret) {
     return Promise.reject(new Error("SOCKET_SECRET is not defined"));

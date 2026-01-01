@@ -14,7 +14,7 @@ export const useSocket = (
     if (!journeyId) return;
 
     const socketUrl =
-      process.env.NEXT_PUBLIC_SOCKET_URL || "http://127.0.0.1:4000";
+      process.env.NEXT_PUBLIC_SOCKET_URL;
 
     // If there's already a global socket, reuse it; otherwise create one with backoff options
     if (!globalSocket) {
