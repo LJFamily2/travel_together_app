@@ -22,14 +22,6 @@ const CREATE_GUEST_USER = gql`
   }
 `;
 
-const REGENERATE_GUEST_INVITE = gql`
-  mutation RegenerateGuestInvite($journeyId: ID!, $userId: ID!) {
-    regenerateGuestInvite(journeyId: $journeyId, userId: $userId) {
-      inviteLink
-    }
-  }
-`;
-
 interface Member {
   id: string;
   name: string;
@@ -131,30 +123,12 @@ export default function MembersModal({
     }
   );
 
-  const [regenerateGuestInvite] = useMutation(REGENERATE_GUEST_INVITE, {
-    onCompleted: (data: any) => {
-      const link = `${window.location.origin}${data.regenerateGuestInvite.inviteLink}`;
-      setCreatedGuestLink(link);
-      setIsAddingGuest(true); // Reuse the guest added view
-    },
-    onError: (error) => {
-      toast.error(error.message);
-    },
-  });
-
   if (!isOpen) return null;
 
   const handleCreateGuest = (e: React.FormEvent) => {
     e.preventDefault();
     if (!guestName.trim() || !journeyId) return;
     createGuestUser({ variables: { journeyId, name: guestName } });
-  };
-
-  const handleShowQr = (memberId: string) => {
-    if (!journeyId) return;
-    const member = members.find((m) => m.id === memberId);
-    if (member) setGuestName(member.name);
-    regenerateGuestInvite({ variables: { journeyId, userId: memberId } });
   };
 
   const resetGuestFlow = () => {
@@ -460,30 +434,6 @@ export default function MembersModal({
                             <BankIcon spin={bankLoadingId === member.id} />
                           </button>
                         )}
-
-                        {/* Show QR to members for guest users */}
-                        {member.isGuest &&
-                          (isLeader || currentUserIsMember) && (
-                            <button
-                              onClick={() => handleShowQr(member.id)}
-                              className="text-blue-500 hover:bg-blue-50 p-2 rounded-full transition-colors cursor-pointer"
-                              title="Show QR Code"
-                            >
-                              <svg
-                                className="w-5 h-5"
-                                fill="none"
-                                stroke="currentColor"
-                                viewBox="0 0 24 24"
-                              >
-                                <path
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  strokeWidth={2}
-                                  d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"
-                                />
-                              </svg>
-                            </button>
-                          )}
 
                         {/* Remove controls only for leaders */}
                         {isLeader &&
