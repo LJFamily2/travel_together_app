@@ -6,7 +6,6 @@ import { useCurrency } from "../context/CurrencyContext";
 import { gql } from "@apollo/client";
 import { useApolloClient } from "@apollo/client/react";
 import { useMutation } from "@apollo/client/react";
-import { writeUserBankInfo } from "../../lib/apolloCache";
 import toast from "react-hot-toast";
 
 const ADD_EXPENSE = gql`
@@ -51,39 +50,9 @@ const DELETE_EXPENSE = gql`
   }
 `;
 
-const UPDATE_BANK_INFO = gql`
-  mutation UpdateBankInfo(
-    $bankName: String
-    $accountNumber: String
-    $accountName: String
-  ) {
-    updateBankInfo(
-      bankName: $bankName
-      accountNumber: $accountNumber
-      accountName: $accountName
-    ) {
-      id
-      bankInfo {
-        bankInformation {
-          name
-          number
-          userName
-        }
-      }
-    }
-  }
-`;
-
 interface Member {
   id: string;
   name: string;
-  bankInfo?: {
-    bankInformation?: {
-      name: string;
-      number: string;
-      userName?: string;
-    };
-  };
 }
 
 interface Split {
@@ -193,32 +162,6 @@ export default function SettleUpModal({
       },
     }),
   });
-
-  // Bank Info State
-  const [showBankInfo, setShowBankInfo] = useState(false);
-  const [bankName, setBankName] = useState(
-    currentUser.bankInfo?.bankInformation?.name || ""
-  );
-  const [accountNumber, setAccountNumber] = useState(
-    currentUser.bankInfo?.bankInformation?.number || ""
-  );
-  const [accountName, setAccountName] = useState(
-    currentUser.bankInfo?.bankInformation?.userName || ""
-  );
-  const [updateBankInfo, { loading: updatingBank }] = useMutation(
-    UPDATE_BANK_INFO,
-    {
-      update(cache, { data }: any) {
-        const updated = data?.updateBankInfo;
-        if (!updated) return;
-        try {
-          writeUserBankInfo(cache, updated);
-        } catch (e) {
-          // ignore cache write failures
-        }
-      },
-    }
-  );
 
   // Mutations for editing/removing deductions
   const [updateExpense] = useMutation(UPDATE_EXPENSE);
@@ -330,23 +273,6 @@ export default function SettleUpModal({
     }
   });
 
-  const handleUpdateBankInfo = async () => {
-    try {
-      await updateBankInfo({
-        variables: {
-          bankName,
-          accountNumber,
-          accountName,
-        },
-      });
-      toast.success("Bank info updated!");
-      setShowBankInfo(false);
-    } catch (err) {
-      console.error("Error updating bank info:", err);
-      toast.error("Failed to update bank info");
-    }
-  };
-
   const handleSettle = async () => {
     if (!recipientId || !deduction) return;
 
@@ -356,24 +282,7 @@ export default function SettleUpModal({
     const deductionAmount = parseFloat(deduction);
     if (isNaN(deductionAmount) || deductionAmount <= 0) {
       toast.error("Please enter a valid deduction amount.");
-      return;
-    }
-
-    // Logic:
-    // We are reducing the debt of someone who owes US.
-    // This is equivalent to them paying us.
-    // So we create an expense where THEY are the payer, and WE are the beneficiary.
-    // Payer: recipientId (The person who owes me)
-    // Split User: currentUser.id (Me)
-    // Amount: deductionAmount
-
-    const finalReason = reason ? `Deduction: ${reason}` : `Deduction`;
-
-    try {
-      await addExpense({
-        variables: {
-          journeyId,
-          payerId: currentUser.id, // I am the creator/payer
+      return;rId: currentUser.id, // I am the creator/payer
           totalAmount: deductionAmount,
           description: finalReason,
           splits: [
@@ -409,49 +318,7 @@ export default function SettleUpModal({
       <div className="bg-white p-6 sm:p-8 rounded-[28px] shadow-xl w-full max-w-lg mx-4 sm:mx-0 max-h-[90vh] overflow-y-auto">
         <div className="flex justify-between items-center mb-4">
           <h3 className="text-lg font-bold">Settle Up</h3>
-          <button
-            onClick={() => setShowBankInfo(!showBankInfo)}
-            className="text-xs text-blue-600 hover:underline cursor-pointer"
-          >
-            {showBankInfo ? "Hide My Bank Info" : "Edit My Bank Info"}
-          </button>
         </div>
-
-        {showBankInfo && (
-          <div className="mb-6 p-4 bg-blue-50 rounded-2xl border border-blue-100">
-            <h4 className="font-semibold mb-2 text-sm">My Bank Details</h4>
-            <div className="space-y-2">
-              <input
-                type="text"
-                placeholder="Bank Name"
-                value={bankName}
-                onChange={(e) => setBankName(e.target.value)}
-                className="w-full p-2 text-sm border border-gray-200 rounded-lg"
-              />
-              <input
-                type="text"
-                placeholder="Account Number"
-                value={accountNumber}
-                onChange={(e) => setAccountNumber(e.target.value)}
-                className="w-full p-2 text-sm border border-gray-200 rounded-lg"
-              />
-              <input
-                type="text"
-                placeholder="Account Name"
-                value={accountName}
-                onChange={(e) => setAccountName(e.target.value)}
-                className="w-full p-2 text-sm border border-gray-200 rounded-lg"
-              />
-              <button
-                onClick={handleUpdateBankInfo}
-                disabled={updatingBank}
-                className="w-full py-1 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 cursor-pointer"
-              >
-                {updatingBank ? "Saving..." : "Save Bank Info"}
-              </button>
-            </div>
-          </div>
-        )}
 
         <div className="mb-6">
           <h4 className="font-semibold mb-2 text-sm text-gray-600">Balances</h4>
@@ -773,33 +640,6 @@ export default function SettleUpModal({
             placeholder="e.g. Lunch yesterday"
           />
         </div>
-
-        {recipientId && (
-          <div className="mb-4 p-3 bg-gray-50 rounded-xl text-sm border border-gray-100">
-            <p className="font-semibold mb-1">Bank Details:</p>
-            {members.find((m) => m.id === recipientId)?.bankInfo
-              ?.bankInformation ? (
-              <>
-                <p>
-                  <span className="text-gray-500">Bank:</span>{" "}
-                  {
-                    members.find((m) => m.id === recipientId)?.bankInfo
-                      ?.bankInformation?.name
-                  }
-                </p>
-                <p>
-                  <span className="text-gray-500">Account:</span>{" "}
-                  {
-                    members.find((m) => m.id === recipientId)?.bankInfo
-                      ?.bankInformation?.number
-                  }
-                </p>
-              </>
-            ) : (
-              <p className="text-gray-500">No bank info available.</p>
-            )}
-          </div>
-        )}
 
         <div className="flex justify-end gap-2 mt-6">
           <button

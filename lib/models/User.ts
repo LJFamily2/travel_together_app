@@ -4,14 +4,6 @@ export interface IUser extends Document {
   name: string;
   email?: string;
   avatar?: string;
-  bankInfo?: {
-    qrcode?: Buffer;
-    bankInformation?: {
-      name?: string;
-      number?: string;
-      userName?: string;
-    };
-  };
   isGuest: boolean;
   createdAt: Date;
 }
@@ -20,14 +12,6 @@ const UserSchema: Schema = new Schema(
   {
     name: { type: String, required: true },
     email: { type: String, unique: true, sparse: true }, // sparse allows null/undefined for guests
-    bankInfo: {
-      qrcode: { type: Buffer },
-      bankInformation: {
-        name: String,
-        number: String,
-        userName: String,
-      },
-    },
     isGuest: { type: Boolean, default: false },
     expireAt: { type: Date },
   },

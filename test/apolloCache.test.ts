@@ -3,7 +3,6 @@ import {
   removeExpenseFromJourneyCache,
   addMemberToJourneyCache,
   updateJourneyMembers,
-  writeUserBankInfo,
 } from "../lib/apolloCache";
 
 describe("apolloCache helpers", () => {
@@ -108,27 +107,5 @@ describe("apolloCache helpers", () => {
     });
     expect(cache.writeFragment).toHaveBeenCalledTimes(3);
     expect(cache.modify).toHaveBeenCalled();
-  });
-
-  test("writeUserBankInfo writes fragment for user", () => {
-    const cache: any = {
-      identify: jest.fn().mockReturnValue("User:5"),
-      writeFragment: jest.fn(),
-      refetchQueries: jest.fn(),
-    };
-
-    const user = {
-      id: "5",
-      bankInfo: {
-        bankInformation: { name: "B", number: "123", userName: "u" },
-      },
-    };
-    writeUserBankInfo(cache, user);
-
-    expect(cache.identify).toHaveBeenCalledWith({
-      __typename: "User",
-      id: user.id,
-    });
-    expect(cache.writeFragment).toHaveBeenCalled();
   });
 });

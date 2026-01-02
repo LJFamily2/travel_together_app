@@ -27,10 +27,6 @@ interface Member {
   name: string;
   email?: string;
   isGuest?: boolean;
-  // Optional bank info if available from parent or fetched via `onShowBankInfo`
-  bankName?: string;
-  accountLast4?: string;
-  iban?: string;
 }
 
 interface MembersModalProps {
@@ -42,13 +38,6 @@ interface MembersModalProps {
   onRemoveMember?: (memberId: string) => void;
   journeyId?: string;
   onRefresh?: () => void;
-  // Optional callback to fetch bank info for a user. Should return an object
-  // like { bankName, accountLast4, iban } or null if not available.
-  onShowBankInfo?: (memberId: string) => Promise<{
-    bankName?: string;
-    accountLast4?: string;
-    iban?: string;
-  } | null>;
 }
 
 export default function MembersModal({
@@ -60,21 +49,12 @@ export default function MembersModal({
   onRemoveMember,
   journeyId,
   onRefresh,
-  onShowBankInfo,
 }: MembersModalProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [confirmRemoveId, setConfirmRemoveId] = useState<string | null>(null);
   const [isAddingGuest, setIsAddingGuest] = useState(false);
   const [guestName, setGuestName] = useState("");
   const [createdGuestLink, setCreatedGuestLink] = useState<string | null>(null);
-  const [bankInfoMap, setBankInfoMap] = useState<
-    Record<
-      string,
-      { bankName?: string; accountLast4?: string; iban?: string } | null
-    >
-  >({});
-  const [bankLoadingId, setBankLoadingId] = useState<string | null>(null);
-  const [showBankId, setShowBankId] = useState<string | null>(null);
 
   const client = useApolloClient();
   const [createGuestUser, { loading: creatingGuest }] = useMutation(
@@ -137,72 +117,9 @@ export default function MembersModal({
     setGuestName("");
   };
 
-  const BankIcon = ({ spin = false }: { spin?: boolean }) => (
-    <svg
-      className={`w-5 h-5 ${spin ? "animate-spin" : ""}`}
-      fill="none"
-      stroke="currentColor"
-      viewBox="0 0 24 24"
-      aria-hidden="true"
-    >
-      <rect
-        x="2"
-        y="5"
-        width="20"
-        height="14"
-        rx="2"
-        ry="2"
-        strokeWidth={2}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        strokeWidth={2}
-        d="M2 10h20"
-      />
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        strokeWidth={2}
-        d="M7 16h.01"
-      />
-    </svg>
-  );
-
-  const renderBankInfo = (
-    info: { bankName?: string; accountLast4?: string; iban?: string } | null
-  ) => {
-    if (info === null) return <div>No bank information available.</div>;
-    if (!info) return <div>Loading bank information…</div>;
-    return (
-      <div className="space-y-1">
-        {info.bankName && (
-          <div>
-            <strong>Bank:</strong> {info.bankName}
-          </div>
-        )}
-        {info.accountLast4 && (
-          <div>
-            <strong>Account:</strong> ****{info.accountLast4}
-          </div>
-        )}
-        {info.iban && (
-          <div>
-            <strong>IBAN:</strong> {info.iban}
-          </div>
-        )}
-      </div>
-    );
-  };
-
   const filteredMembers = members.filter((member) =>
     member.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
-
-  const currentUserIsMember =
-    !!currentUserId && members.some((m) => m.id === currentUserId);
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
@@ -384,57 +301,6 @@ export default function MembersModal({
                     </div>
                     {member.id !== currentUserId && (
                       <div className="flex items-center gap-1">
-                        {/* Show Bank button - visible to any member of the journey */}
-                        {(isLeader || currentUserIsMember) && (
-                          <button
-                            onClick={async () => {
-                              if (showBankId === member.id) {
-                                setShowBankId(null);
-                                return;
-                              }
-                              // If we already have cached info, just show it
-                              if (bankInfoMap[member.id]) {
-                                setShowBankId(member.id);
-                                return;
-                              }
-                              if (onShowBankInfo) {
-                                try {
-                                  setBankLoadingId(member.id);
-                                  const info = await onShowBankInfo(member.id);
-                                  setBankInfoMap((m) => ({
-                                    ...m,
-                                    [member.id]: info,
-                                  }));
-                                  setShowBankId(member.id);
-                                } catch (e) {
-                                  setBankInfoMap((m) => ({
-                                    ...m,
-                                    [member.id]: null,
-                                  }));
-                                  setShowBankId(member.id);
-                                } finally {
-                                  setBankLoadingId(null);
-                                }
-                              } else {
-                                // No fetcher provided — show any inline bank info or a placeholder
-                                setBankInfoMap((m) => ({
-                                  ...m,
-                                  [member.id]: {
-                                    bankName: member.bankName,
-                                    accountLast4: member.accountLast4,
-                                    iban: member.iban,
-                                  },
-                                }));
-                                setShowBankId(member.id);
-                              }
-                            }}
-                            title="Show bank info"
-                            className="text-green-600 hover:bg-green-50 p-2 rounded-full transition-colors cursor-pointer"
-                          >
-                            <BankIcon spin={bankLoadingId === member.id} />
-                          </button>
-                        )}
-
                         {/* Remove controls only for leaders */}
                         {isLeader &&
                           onRemoveMember &&
@@ -480,11 +346,6 @@ export default function MembersModal({
                       </div>
                     )}
                   </li>
-                  {showBankId === member.id && (
-                    <div className="mt-2 px-4 py-3 bg-white border border-gray-100 rounded-2xl text-sm text-gray-700 w-full">
-                      {renderBankInfo(bankInfoMap[member.id] ?? null)}
-                    </div>
-                  )}
                 </Fragment>
               ))
             )}

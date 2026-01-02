@@ -163,34 +163,9 @@ export function updateJourneyMembers(
   }
 }
 
-export function writeUserBankInfo(cache: ApolloCache, user: any) {
-  try {
-    const id = cache.identify({ __typename: "User", id: user.id });
-    if (!id) return;
-    const fragment = gql`
-      fragment UpdatedBank on User {
-        id
-        bankInfo {
-          bankInformation {
-            name
-            number
-            userName
-          }
-        }
-      }
-    `;
-    cache.writeFragment({ id, fragment, data: user });
-  } catch (e) {
-    try {
-      (cache as any).refetchQueries({ include: "active" });
-    } catch (_) {}
-  }
-}
-
 export default {
   addExpenseToJourneyCache,
   removeExpenseFromJourneyCache,
   addMemberToJourneyCache,
   updateJourneyMembers,
-  writeUserBankInfo,
 };

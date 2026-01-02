@@ -282,41 +282,6 @@ const userResolvers = {
         user,
       };
     },
-    updateBankInfo: async (
-      _: unknown,
-      {
-        bankName,
-        accountNumber,
-        accountName,
-      }: { bankName?: string; accountNumber?: string; accountName?: string },
-      context: { user: { userId: string } }
-    ) => {
-      if (!context.user) throw new Error("Unauthorized");
-      await dbConnect();
-
-      const updateData: any = {};
-      if (bankName) updateData["bankInfo.bankInformation.name"] = bankName;
-      if (accountNumber)
-        updateData["bankInfo.bankInformation.number"] = accountNumber;
-      if (accountName)
-        updateData["bankInfo.bankInformation.userName"] = accountName;
-
-      const updatedUser = await User.findByIdAndUpdate(
-        context.user.userId,
-        { $set: updateData },
-        { new: true }
-      );
-
-      return updatedUser;
-    },
-  },
-  BankInfo: {
-    qrcode: (parent: { qrcode?: Buffer }) => {
-      if (parent.qrcode && Buffer.isBuffer(parent.qrcode)) {
-        return parent.qrcode.toString("base64");
-      }
-      return parent.qrcode;
-    },
   },
   User: {
     id: (parent: { _id: mongoose.Types.ObjectId; id?: string }) => {

@@ -1,17 +1,6 @@
 import { gql } from "graphql-tag";
 
 const typeDefs = gql`
-  type BankDetails {
-    name: String
-    number: String
-    userName: String
-  }
-
-  type BankInfo {
-    qrcode: String
-    bankInformation: BankDetails
-  }
-
   type AuthPayload {
     token: String
     user: User
@@ -25,7 +14,6 @@ const typeDefs = gql`
     name: String!
     email: String
     avatar: String
-    bankInfo: BankInfo
     isGuest: Boolean
   }
 
@@ -109,11 +97,6 @@ const typeDefs = gql`
     deleteExpense(expenseId: ID!): Boolean
     joinAsGuest(name: String!, journeyId: ID!): AuthPayload
     login(userId: ID!, journeyId: ID!): AuthPayload
-    updateBankInfo(
-      bankName: String
-      accountNumber: String
-      accountName: String
-    ): User
     leaveJourney(journeyId: ID!, leaderTimezoneOffsetMinutes: Int): Journey
     generateJoinToken(journeyId: ID!): String
     joinJourneyViaToken(

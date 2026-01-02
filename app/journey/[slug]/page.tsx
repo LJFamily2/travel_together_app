@@ -50,12 +50,6 @@ const GET_DASHBOARD_DATA = gql`
         id
         name
         isGuest
-        bankInfo {
-          bankInformation {
-            name
-            number
-          }
-        }
       }
       expenses {
         id
@@ -81,12 +75,6 @@ const GET_DASHBOARD_DATA = gql`
     me {
       id
       name
-      bankInfo {
-        bankInformation {
-          name
-          number
-        }
-      }
     }
   }
 `;
@@ -134,24 +122,12 @@ interface DashboardData {
       id: string;
       name: string;
       isGuest?: boolean;
-      bankInfo?: {
-        bankInformation?: {
-          name: string;
-          number: string;
-        };
-      };
     }[];
     expenses: Expense[];
   };
   me: {
     id: string;
     name: string;
-    bankInfo?: {
-      bankInformation?: {
-        name: string;
-        number: string;
-      };
-    };
   };
 }
 
@@ -165,12 +141,6 @@ interface LeaveJourneyResponse {
       id: string;
       name: string;
       isGuest?: boolean;
-      bankInfo?: {
-        bankInformation?: {
-          name: string;
-          number: string;
-        };
-      };
     }[];
   };
 }
@@ -191,12 +161,6 @@ const LEAVE_JOURNEY = gql`
       members {
         id
         name
-        bankInfo {
-          bankInformation {
-            name
-            number
-          }
-        }
       }
     }
   }
