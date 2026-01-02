@@ -11,7 +11,8 @@ export interface IJourney extends Document {
   rejectedMembers: mongoose.Types.ObjectId[];
   password?: string;
   requireApproval: boolean;
-  isLocked: boolean;
+  isLocked: boolean; // Locks invitation
+  isInputLocked: boolean; // Locks expenses/inputs
   status: "active" | "complete";
   createdAt: Date;
   expireAt?: Date;
@@ -34,6 +35,7 @@ const JourneySchema: Schema = new Schema(
     password: { type: String },
     requireApproval: { type: Boolean, default: false },
     isLocked: { type: Boolean, default: false },
+    isInputLocked: { type: Boolean, default: false },
     status: { type: String, enum: ["active", "complete"], default: "active" },
     expireAt: { type: Date },
     // Token metadata - used for single-active token or revocation

@@ -1,8 +1,10 @@
 import expenseResolvers from "../lib/graphql/resolvers/expenses";
 import Expense from "../lib/models/Expense";
+import Journey from "../lib/models/Journey";
 
 jest.mock("../lib/mongodb", () => jest.fn());
 jest.mock("../lib/models/Expense");
+jest.mock("../lib/models/Journey");
 
 jest.mock("../lib/utils/expiration", () => ({
   refreshJourneyExpiration: jest.fn().mockResolvedValue(null),
@@ -13,6 +15,10 @@ describe("Expense resolvers - addExpense", () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    (Journey.findById as jest.Mock).mockResolvedValue({
+      isInputLocked: false,
+      endDate: null,
+    });
   });
 
   it("accepts deduction-style splits (base amounts 0, deduction equals total)", async () => {
@@ -160,6 +166,7 @@ describe("Expense resolvers - updateExpense & deleteExpense", () => {
     const existingExpense: any = {
       _id: expenseId,
       payerId,
+      journeyId: "journey-1",
       totalAmount: 200000,
       splits: [],
       save: jest.fn().mockResolvedValue(true),

@@ -35,12 +35,25 @@ const TOGGLE_JOURNEY_LOCK = gql`
   }
 `;
 
+const TOGGLE_JOURNEY_INPUT_LOCK = gql`
+  mutation ToggleJourneyInputLock($journeyId: ID!, $isInputLocked: Boolean!) {
+    toggleJourneyInputLock(
+      journeyId: $journeyId
+      isInputLocked: $isInputLocked
+    ) {
+      id
+      isInputLocked
+    }
+  }
+`;
+
 interface JourneySettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
   journeyId: string;
   currentRequireApproval: boolean;
   currentIsLocked: boolean;
+  currentIsInputLocked: boolean;
   hasPassword: boolean;
 }
 
@@ -50,17 +63,22 @@ export default function JourneySettingsModal({
   journeyId,
   currentRequireApproval,
   currentIsLocked,
+  currentIsInputLocked,
   hasPassword,
 }: JourneySettingsModalProps) {
   const [password, setPassword] = useState("");
   const [requireApproval, setRequireApproval] = useState(
-    currentRequireApproval
+    currentRequireApproval ?? false
   );
-  const [isLocked, setIsLocked] = useState(currentIsLocked);
+  const [isLocked, setIsLocked] = useState(currentIsLocked ?? false);
+  const [isInputLocked, setIsInputLocked] = useState(
+    currentIsInputLocked ?? false
+  );
 
   const [setJourneyPassword] = useMutation(SET_JOURNEY_PASSWORD);
   const [toggleApproval] = useMutation(TOGGLE_APPROVAL_REQUIREMENT);
   const [toggleLock] = useMutation(TOGGLE_JOURNEY_LOCK);
+  const [toggleInputLock] = useMutation(TOGGLE_JOURNEY_INPUT_LOCK);
 
   const handleSavePassword = async () => {
     try {
@@ -112,6 +130,22 @@ export default function JourneySettingsModal({
     }
   };
 
+  const handleToggleInputLock = async (checked: boolean) => {
+    try {
+      await toggleInputLock({
+        variables: {
+          journeyId,
+          isInputLocked: checked,
+        },
+      });
+      setIsInputLocked(checked);
+      toast.success(checked ? "Inputs locked" : "Inputs unlocked");
+    } catch (error) {
+      toast.error("Failed to update input lock setting");
+      console.error(error);
+    }
+  };
+
   if (!isOpen) return null;
 
   return (
@@ -141,7 +175,41 @@ export default function JourneySettingsModal({
         </h2>
 
         <div className="space-y-6">
-          {/* Lock Journey Toggle */}
+          {/* Lock Journey Invitation Toggle */}
+          <div className="bg-gray-50 p-4 rounded-2xl border border-gray-100 flex items-center justify-between">
+            <div>
+              <h3 className="font-semibold text-gray-900 flex items-center gap-2">
+                <svg
+                  className="w-5 h-5 text-gray-500"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"
+                  />
+                </svg>
+                Lock Invitations
+              </h3>
+              <p className="text-sm text-gray-500 mt-1">
+                Prevent new members from joining
+              </p>
+            </div>
+            <label className="relative inline-flex items-center cursor-pointer">
+              <input
+                type="checkbox"
+                className="sr-only peer"
+                checked={isLocked}
+                onChange={(e) => handleToggleLock(e.target.checked)}
+              />
+              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-black"></div>
+            </label>
+          </div>
+
+          {/* Lock Journey Input Toggle */}
           <div className="bg-gray-50 p-4 rounded-2xl border border-gray-100 flex items-center justify-between">
             <div>
               <h3 className="font-semibold text-gray-900 flex items-center gap-2">
@@ -158,18 +226,18 @@ export default function JourneySettingsModal({
                     d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
                   />
                 </svg>
-                Lock Journey
+                Lock Inputs
               </h3>
               <p className="text-sm text-gray-500 mt-1">
-                Prevent anyone new from joining
+                Prevent adding or editing expenses
               </p>
             </div>
             <label className="relative inline-flex items-center cursor-pointer">
               <input
                 type="checkbox"
                 className="sr-only peer"
-                checked={isLocked}
-                onChange={(e) => handleToggleLock(e.target.checked)}
+                checked={isInputLocked}
+                onChange={(e) => handleToggleInputLock(e.target.checked)}
               />
               <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-black"></div>
             </label>

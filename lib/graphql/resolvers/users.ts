@@ -66,6 +66,13 @@ const userResolvers = {
         throw new Error("Journey not found");
       }
 
+      if (journey.isLocked) {
+        throw new Error("Journey is locked. Cannot join.");
+      }
+      if (journey.endDate && new Date() > new Date(journey.endDate)) {
+        throw new Error("Journey has ended. Cannot join.");
+      }
+
       // Check if name is taken in this journey
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const isNameTaken = (journey.members as any[]).some(

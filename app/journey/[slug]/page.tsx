@@ -34,6 +34,7 @@ const GET_DASHBOARD_DATA = gql`
       slug
       name
       expireAt
+      endDate
       leader {
         id
         name
@@ -41,6 +42,7 @@ const GET_DASHBOARD_DATA = gql`
       hasPassword
       requireApproval
       isLocked
+      isInputLocked
       pendingMembers {
         id
         name
@@ -106,6 +108,7 @@ interface DashboardData {
     slug: string;
     name: string;
     expireAt: string | null;
+    endDate?: string | null;
     leader: {
       id: string;
       name: string;
@@ -113,6 +116,7 @@ interface DashboardData {
     hasPassword: boolean;
     requireApproval: boolean;
     isLocked: boolean;
+    isInputLocked: boolean;
     pendingMembers: {
       id: string;
       name: string;
@@ -254,6 +258,10 @@ export default function JourneyDashboard() {
 
   const currentUser = data?.me;
   const isLeader = journey?.leader?.id === currentUser?.id;
+
+  const isInputLocked =
+    journey?.isInputLocked ||
+    (journey?.endDate && new Date() > new Date(journey.endDate));
 
   useEffect(() => {
     if (journey?.expireAt) {
@@ -741,6 +749,7 @@ export default function JourneyDashboard() {
                   journeyId={journey.id}
                   currentUser={currentUser}
                   members={journey.members}
+                  isLocked={isInputLocked}
                 />
               </div>
 
@@ -773,6 +782,7 @@ export default function JourneyDashboard() {
           journeyId={journey.id}
           currentRequireApproval={journey.requireApproval}
           currentIsLocked={journey.isLocked}
+          currentIsInputLocked={journey.isInputLocked}
           hasPassword={journey.hasPassword}
         />
 

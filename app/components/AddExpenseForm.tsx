@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
 import { useState, ChangeEvent } from "react";
@@ -56,12 +57,14 @@ interface AddExpenseFormProps {
   journeyId: string;
   currentUser: Member;
   members: Member[];
+  isLocked?: boolean;
 }
 
 export default function AddExpenseForm({
   journeyId,
   currentUser,
   members,
+  isLocked = false,
 }: AddExpenseFormProps) {
   const { formatCurrency } = useCurrency();
   const client = useApolloClient();
@@ -304,6 +307,19 @@ export default function AddExpenseForm({
   const filteredMembers = uniqueMembers.filter((m) =>
     m.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  if (isLocked) {
+    return (
+      <div className="p-6 border border-gray-100 rounded-[34px] shadow-sm bg-gray-50 text-center">
+        <h3 className="text-lg font-bold mb-2 text-gray-400">
+          Add New Expense
+        </h3>
+        <p className="text-gray-500 text-sm">
+          This journey is locked. No new expenses can be added.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <form

@@ -33,6 +33,7 @@ const typeDefs = gql`
     hasPassword: Boolean
     requireApproval: Boolean
     isLocked: Boolean
+    isInputLocked: Boolean
   }
 
   type Split {
@@ -110,6 +111,7 @@ const typeDefs = gql`
       requireApproval: Boolean!
     ): Journey
     toggleJourneyLock(journeyId: ID!, isLocked: Boolean!): Journey
+    toggleJourneyInputLock(journeyId: ID!, isInputLocked: Boolean!): Journey
     approveJoinRequest(journeyId: ID!, userId: ID!): Journey
     rejectJoinRequest(journeyId: ID!, userId: ID!): Journey
     approveAllJoinRequests(journeyId: ID!): Journey

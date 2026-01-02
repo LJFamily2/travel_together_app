@@ -520,13 +520,44 @@ const journeyResolvers = {
     },
     toggleJourneyLock: async (
       _: unknown,
-      { journeyId, isLocked }: { journeyId: string; isLocked: boolean }
+      { journeyId, isLocked }: { journeyId: string; isLocked: boolean },
+      context: GraphQLContext
     ) => {
       await dbConnect();
+      const userId = context?.user?.userId;
+      if (!userId) throw new Error("Unauthorized");
+
       const journey = await Journey.findById(journeyId);
       if (!journey) throw new Error("Journey not found");
 
+      if (journey.leaderId.toString() !== userId) {
+        throw new Error("Only the leader can lock/unlock the journey");
+      }
+
       journey.isLocked = isLocked;
+      await journey.save();
+      return journey;
+    },
+    toggleJourneyInputLock: async (
+      _: unknown,
+      {
+        journeyId,
+        isInputLocked,
+      }: { journeyId: string; isInputLocked: boolean },
+      context: GraphQLContext
+    ) => {
+      await dbConnect();
+      const userId = context?.user?.userId;
+      if (!userId) throw new Error("Unauthorized");
+
+      const journey = await Journey.findById(journeyId);
+      if (!journey) throw new Error("Journey not found");
+
+      if (journey.leaderId.toString() !== userId) {
+        throw new Error("Only the leader can lock/unlock the journey input");
+      }
+
+      journey.isInputLocked = isInputLocked;
       await journey.save();
       return journey;
     },

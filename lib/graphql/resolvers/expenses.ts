@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
 import dbConnect from "../../mongodb";
+import Journey from "../../models/Journey";
 import Expense, { IExpense } from "../../models/Expense";
 import User from "../../models/User";
 import { refreshJourneyExpiration } from "../../utils/expiration";
@@ -12,6 +13,32 @@ interface SplitInput {
 }
 
 type ExpenseWithHasImage = IExpense & { hasImage?: boolean };
+
+const checkJourneyLock = async (journeyId: string) => {
+  const journey = await Journey.findById(journeyId);
+  if (!journey) throw new Error("Journey not found");
+
+  if (journey.isInputLocked) {
+    throw new Error("Journey input is locked. No changes allowed.");
+  }
+
+  if (journey.endDate) {
+    const endDate = new Date(journey.endDate);
+    // Set end date to end of day to be generous? Or exact time?
+    // Usually end date implies the day inclusive.
+    // Let's assume endDate is stored as Date.
+    // If endDate is 2023-10-27T00:00:00.000Z, then strictly > means it's over.
+    // But usually "end date" means "until the end of that day".
+    // Let's check how endDate is stored.
+    // In Journey model: endDate: { type: Date }.
+    // In createJourney: it comes as string.
+    // Let's assume strict comparison for now, or maybe add 1 day buffer if needed.
+    // "when the journey end date meet" -> implies when it passes.
+    if (new Date() > endDate) {
+      throw new Error("Journey has ended. No changes allowed.");
+    }
+  }
+};
 
 const expenseResolvers = {
   Mutation: {
@@ -34,6 +61,8 @@ const expenseResolvers = {
       }
     ) => {
       await dbConnect();
+      await checkJourneyLock(journeyId);
+
       // Logic check: (Split Amount) - (Deduction) = Final Owed is handled in UI or calculation,
       // here we just store the data.
 
@@ -110,6 +139,8 @@ const expenseResolvers = {
       await dbConnect();
       const expense = await Expense.findById(expenseId);
       if (!expense) throw new Error("Expense not found");
+
+      await checkJourneyLock(expense.journeyId.toString());
 
       // Authorization: only the payer can change the expense
       const requesterId = context?.user?.userId;
@@ -191,6 +222,8 @@ const expenseResolvers = {
       await dbConnect();
       const expense = await Expense.findById(expenseId);
       if (!expense) throw new Error("Expense not found");
+
+      await checkJourneyLock(expense.journeyId.toString());
 
       const requesterId = context?.user?.userId;
       if (!requesterId || String(requesterId) !== String(expense.payerId)) {
