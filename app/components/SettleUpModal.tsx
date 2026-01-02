@@ -282,7 +282,24 @@ export default function SettleUpModal({
     const deductionAmount = parseFloat(deduction);
     if (isNaN(deductionAmount) || deductionAmount <= 0) {
       toast.error("Please enter a valid deduction amount.");
-      return;rId: currentUser.id, // I am the creator/payer
+      return;
+    }
+
+    // Logic:
+    // We are reducing the debt of someone who owes US.
+    // This is equivalent to them paying us.
+    // So we create an expense where THEY are the payer, and WE are the beneficiary.
+    // Payer: recipientId (The person who owes me)
+    // Split User: currentUser.id (Me)
+    // Amount: deductionAmount
+
+    const finalReason = reason ? `Deduction: ${reason}` : `Deduction`;
+
+    try {
+      await addExpense({
+        variables: {
+          journeyId,
+          payerId: currentUser.id, // I am the creator/payer
           totalAmount: deductionAmount,
           description: finalReason,
           splits: [
