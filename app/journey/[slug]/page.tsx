@@ -261,7 +261,7 @@ export default function JourneyDashboard() {
 
   const isInputLocked =
     journey?.isInputLocked ||
-    (journey?.endDate && new Date() > new Date(journey.endDate));
+    (journey?.endDate ? new Date() > new Date(journey.endDate) : false);
 
   useEffect(() => {
     if (journey?.expireAt) {
