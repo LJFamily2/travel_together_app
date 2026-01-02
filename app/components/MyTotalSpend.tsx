@@ -56,7 +56,7 @@ export default function MyTotalSpend({
   return (
     <div className="p-6 border border-gray-100 rounded-[34px] shadow-sm bg-white mb-6">
       <h3 className="text-lg font-bold mb-4">My Financials</h3>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 gap-4">
         <div className="p-4 bg-gray-50 rounded-2xl">
           <p className="text-sm text-gray-600">Total Share (Cost)</p>
           <div className="mt-1">

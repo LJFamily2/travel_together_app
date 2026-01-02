@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { gql } from "@apollo/client";
 import type { ApolloCache } from "@apollo/client";
 

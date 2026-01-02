@@ -460,7 +460,6 @@ export default function JourneyDashboard() {
       const updated = result?.data?.removeMember;
       if (updated) {
         try {
-          const { updateJourneyMembers } = require("../../../lib/apolloCache");
           updateJourneyMembers(
             client.cache,
             journeyId,
@@ -612,7 +611,7 @@ export default function JourneyDashboard() {
                       )}
                     </button>
                     <span
-                      className="text-gray-400"
+                      className="text-gray-400 cursor-pointer"
                       title="Tokens are single-use; generating a new QR invalidates previous tokens. Token expires in 5 minutes."
                       aria-hidden
                     >
