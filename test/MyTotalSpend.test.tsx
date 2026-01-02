@@ -31,7 +31,7 @@ describe("MyTotalSpend", () => {
     );
 
     expect(screen.getByText("+50")).toBeInTheDocument();
-    expect(screen.getByText("You are owed")).toBeInTheDocument();
+    expect(screen.getByText("You are owed this amount")).toBeInTheDocument();
   });
 
   it("calculates net balance correctly when I receive a deduction (settlement)", () => {
@@ -112,6 +112,8 @@ describe("MyTotalSpend", () => {
     );
 
     expect(screen.getByText("-40")).toBeInTheDocument();
-    expect(screen.getByText("You owe")).toBeInTheDocument();
+    expect(
+      screen.getByText("You owe this amount to the group")
+    ).toBeInTheDocument();
   });
 });

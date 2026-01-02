@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
-import { useState } from "react";
+import { useState, Fragment } from "react";
 import { useMutation } from "@apollo/client/react";
 import { gql } from "@apollo/client";
 import { useApolloClient } from "@apollo/client/react";
@@ -390,11 +390,8 @@ export default function MembersModal({
               </li>
             ) : (
               filteredMembers.map((member) => (
-                <>
-                  <li
-                    key={member.id}
-                    className="flex items-center justify-between p-3 bg-gray-50 rounded-2xl border border-gray-100"
-                  >
+                <Fragment key={member.id}>
+                  <li className="flex items-center justify-between p-3 bg-gray-50 rounded-2xl border border-gray-100">
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 bg-white border border-gray-200 rounded-full flex items-center justify-center text-gray-700 font-bold shadow-sm shrink-0">
                         {member.name.charAt(0).toUpperCase()}
@@ -538,7 +535,7 @@ export default function MembersModal({
                       {renderBankInfo(bankInfoMap[member.id] ?? null)}
                     </div>
                   )}
-                </>
+                </Fragment>
               ))
             )}
           </ul>
