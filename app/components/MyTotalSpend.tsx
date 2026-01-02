@@ -55,35 +55,83 @@ export default function MyTotalSpend({
 
   return (
     <div className="p-6 border border-gray-100 rounded-[34px] shadow-sm bg-white mb-6">
-      <h3 className="text-lg font-bold mb-4">My Financials</h3>
-      <div className="grid grid-cols-1 gap-4">
-        <div className="p-4 bg-gray-50 rounded-2xl">
-          <p className="text-sm text-gray-600">Total Share (Cost)</p>
-          <div className="mt-1">
-            <div className="overflow-x-auto overflow-y-hidden">
-              <span className="inline-block min-w-max font-mono text-2xl sm:text-3xl font-bold text-gray-900 text-right">
-                ${formatCurrency(myTotalCost)}
-              </span>
-            </div>
+      <h3 className="text-lg font-bold mb-4 text-gray-800">My Financials</h3>
+
+      <div className="space-y-3">
+        {/* Total Paid */}
+        <div className="flex justify-between items-center p-3 bg-gray-50 rounded-2xl">
+          <div className="flex flex-col">
+            <span className="text-sm font-medium text-gray-600">
+              Total Paid
+            </span>
+            <span className="text-xs text-gray-400">What you paid</span>
+          </div>
+          <span className="font-mono text-lg font-semibold text-gray-900">
+            ${formatCurrency(myTotalPayments)}
+          </span>
+        </div>
+
+        {/* Total Share */}
+        <div className="flex justify-between items-center p-3 bg-gray-50 rounded-2xl">
+          <div className="flex flex-col">
+            <span className="text-sm font-medium text-gray-600">
+              Total Share
+            </span>
+            <span className="text-xs text-gray-400">Your fair share</span>
+          </div>
+          <span className="font-mono text-lg font-semibold text-gray-900">
+            ${formatCurrency(myTotalCost)}
+          </span>
+        </div>
+
+        {/* Divider with calculation hint */}
+        <div className="relative py-2">
+          <div
+            className="absolute inset-0 flex items-center"
+            aria-hidden="true"
+          >
+            <div className="w-full border-t border-gray-200"></div>
+          </div>
+          <div className="relative flex justify-center">
+            <span className="bg-white px-2 text-xs text-gray-400">
+              Net Balance = Paid - Share
+            </span>
           </div>
         </div>
-        <div className="p-4 bg-gray-50 rounded-2xl">
-          <p className="text-sm text-gray-600">Net Balance</p>
-          <div className="mt-1">
-            <div className="overflow-x-auto overflow-y-hidden">
-              <span
-                className={`inline-block min-w-max font-mono text-2xl sm:text-3xl font-bold ${
-                  netBalance >= 0 ? "text-green-600" : "text-red-600"
-                } text-right`}
-              >
-                {netBalance >= 0
-                  ? `+${formatCurrency(netBalance)}`
-                  : `${formatCurrency(netBalance)}`}
-              </span>
-            </div>
+
+        {/* Net Balance */}
+        <div
+          className={`p-4 rounded-2xl border ${
+            netBalance >= 0
+              ? "bg-green-50 border-green-100"
+              : "bg-red-50 border-red-100"
+          }`}
+        >
+          <div className="flex justify-between items-center mb-1">
+            <span
+              className={`text-sm font-bold ${
+                netBalance >= 0 ? "text-green-800" : "text-red-800"
+              }`}
+            >
+              Net Balance
+            </span>
+            <span
+              className={`font-mono text-2xl font-bold ${
+                netBalance >= 0 ? "text-green-600" : "text-red-600"
+              }`}
+            >
+              {netBalance >= 0 ? "+" : ""}
+              {formatCurrency(netBalance)}
+            </span>
           </div>
-          <p className="text-xs text-gray-500 mt-1">
-            {netBalance >= 0 ? "You are owed" : "You owe"}
+          <p
+            className={`text-xs ${
+              netBalance >= 0 ? "text-green-700" : "text-red-700"
+            }`}
+          >
+            {netBalance >= 0
+              ? "You are owed this amount"
+              : "You owe this amount to the group"}
           </p>
         </div>
       </div>
