@@ -1,9 +1,9 @@
 import Redis from "ioredis";
 import { RateLimiterRedis } from "rate-limiter-flexible";
 
-const redisUrl = process.env.REDIS_URL || "redis://127.0.0.1:6379";
+const redisUrl = process.env.REDIS_URL;
 
-export const redisClient = new Redis(redisUrl);
+export const redisClient = new Redis(redisUrl!);
 
 type CommonOpts = {
   storeClient: Redis;

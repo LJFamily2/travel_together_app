@@ -38,7 +38,7 @@ function resolveRedisUrl() {
 
 (async () => {
   try {
-    const redisUrl = resolveRedisUrl() || "redis://127.0.0.1:6379";
+    const redisUrl = resolveRedisUrl();
     console.log("Using REDIS_URL =", redisUrl);
     const client = new Redis(redisUrl);
 
