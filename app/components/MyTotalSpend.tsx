@@ -59,29 +59,33 @@ export default function MyTotalSpend({
 
       <div className="space-y-3">
         {/* Total Paid */}
-        <div className="flex justify-between items-center p-3 bg-gray-50 rounded-2xl">
-          <div className="flex flex-col">
-            <span className="text-sm font-medium text-gray-600">
+        <div className="flex flex-col sm:flex-row sm:justify-between items-start sm:items-center p-3 bg-gray-50 rounded-2xl gap-2">
+          <div className="flex flex-col shrink-0">
+            <span className="text-sm font-medium text-gray-600 whitespace-nowrap">
               Total Paid
             </span>
-            <span className="text-xs text-gray-400">What you paid</span>
+            <span className="text-xs text-gray-400 whitespace-nowrap">What you paid</span>
           </div>
-          <span className="font-mono text-lg font-semibold text-gray-900">
-            ${formatCurrency(myTotalPayments)}
-          </span>
+          <div className="max-w-full overflow-x-auto pb-1 scrollbar-hide">
+            <span className="font-mono text-lg font-semibold text-gray-900 whitespace-nowrap">
+              ${formatCurrency(myTotalPayments)}
+            </span>
+          </div>
         </div>
 
         {/* Total Share */}
-        <div className="flex justify-between items-center p-3 bg-gray-50 rounded-2xl">
-          <div className="flex flex-col">
-            <span className="text-sm font-medium text-gray-600">
+        <div className="flex flex-col sm:flex-row sm:justify-between items-start sm:items-center p-3 bg-gray-50 rounded-2xl gap-2">
+          <div className="flex flex-col shrink-0">
+            <span className="text-sm font-medium text-gray-600 whitespace-nowrap">
               Total Share
             </span>
-            <span className="text-xs text-gray-400">Your fair share</span>
+            <span className="text-xs text-gray-400 whitespace-nowrap">Your fair share</span>
           </div>
-          <span className="font-mono text-lg font-semibold text-gray-900">
-            ${formatCurrency(myTotalCost)}
-          </span>
+          <div className="max-w-full overflow-x-auto pb-1 scrollbar-hide">
+            <span className="font-mono text-lg font-semibold text-gray-900 whitespace-nowrap">
+              ${formatCurrency(myTotalCost)}
+            </span>
+          </div>
         </div>
 
         {/* Divider with calculation hint */}
@@ -101,28 +105,30 @@ export default function MyTotalSpend({
 
         {/* Net Balance */}
         <div
-          className={`p-4 rounded-2xl border ${
+          className={`p-4 rounded-2xl border flex flex-col ${
             netBalance >= 0
               ? "bg-green-50 border-green-100"
               : "bg-red-50 border-red-100"
           }`}
         >
-          <div className="flex justify-between items-center mb-1">
+          <div className="flex flex-col sm:flex-row sm:justify-between items-start sm:items-center mb-1 gap-2">
             <span
-              className={`text-sm font-bold ${
+              className={`text-sm font-bold shrink-0 whitespace-nowrap ${
                 netBalance >= 0 ? "text-green-800" : "text-red-800"
               }`}
             >
               Net Balance
             </span>
-            <span
-              className={`font-mono text-2xl font-bold ${
-                netBalance >= 0 ? "text-green-600" : "text-red-600"
-              }`}
-            >
-              {netBalance >= 0 ? "+" : ""}
-              {formatCurrency(netBalance)}
-            </span>
+            <div className="max-w-full overflow-x-auto pb-1 scrollbar-hide">
+              <span
+                className={`font-mono text-2xl font-bold whitespace-nowrap ${
+                  netBalance >= 0 ? "text-green-600" : "text-red-600"
+                }`}
+              >
+                {netBalance >= 0 ? "+" : ""}
+                {formatCurrency(netBalance)}
+              </span>
+            </div>
           </div>
           <p
             className={`text-xs ${

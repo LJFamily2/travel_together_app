@@ -4,6 +4,7 @@ import Journey from "../../models/Journey";
 import Expense, { IExpense } from "../../models/Expense";
 import User from "../../models/User";
 import { refreshJourneyExpiration } from "../../utils/expiration";
+import { logJourneyAction } from "../../utils/actionLog";
 
 interface SplitInput {
   userId: string;
@@ -38,6 +39,8 @@ const checkJourneyLock = async (journeyId: string) => {
       throw new Error("Journey has ended. No changes allowed.");
     }
   }
+
+  return journey;
 };
 
 const expenseResolvers = {
@@ -58,7 +61,7 @@ const expenseResolvers = {
         description: string;
         splits: SplitInput[];
         imageBase64?: string;
-      }
+      },
     ) => {
       await dbConnect();
       await checkJourneyLock(journeyId);
@@ -70,18 +73,18 @@ const expenseResolvers = {
       const sumBase = splits.reduce((acc, s) => acc + (s.baseAmount || 0), 0);
       const sumDeductions = splits.reduce(
         (acc, s) => acc + (s.deduction || 0),
-        0
+        0,
       );
       const totalFromSplits = sumBase + sumDeductions;
       if (Math.abs(totalFromSplits - totalAmount) > 0.01) {
         throw new Error(
           `The sum of splits (base: ${sumBase.toFixed(
-            2
+            2,
           )}, deductions: ${sumDeductions.toFixed(
-            2
+            2,
           )}, total: ${totalFromSplits.toFixed(
-            2
-          )}) must equal the total amount (${totalAmount.toFixed(2)})`
+            2,
+          )}) must equal the total amount (${totalAmount.toFixed(2)})`,
         );
       }
 
@@ -115,6 +118,16 @@ const expenseResolvers = {
 
       await newExpense.save();
 
+      // Log the creation
+      const journey = await Journey.findById(journeyId);
+      await logJourneyAction({
+        journeyId,
+        action: "EXPENSE_CREATED",
+        actorId: payerId,
+        details: `Expense: ${description}`,
+        expireAt: journey?.expireAt,
+      });
+
       return await newExpense.populate("payerId");
     },
     updateExpense: async (
@@ -134,21 +147,38 @@ const expenseResolvers = {
         splits?: SplitInput[];
         imageBase64?: string;
       },
-      context: { user?: { userId?: string } }
+      context: { user?: { userId?: string } },
     ) => {
       await dbConnect();
       const expense = await Expense.findById(expenseId);
       if (!expense) throw new Error("Expense not found");
 
-      await checkJourneyLock(expense.journeyId.toString());
+      const journey = await checkJourneyLock(expense.journeyId.toString());
 
-      // Authorization: only the payer can change the expense
+      // Authorization: payer or journey leader can change the expense
       const requesterId = context?.user?.userId;
-      if (!requesterId || String(requesterId) !== String(expense.payerId)) {
+      const isPayer =
+        !!requesterId && String(requesterId) === String(expense.payerId);
+      const isLeader =
+        !!requesterId && String(requesterId) === String(journey.leaderId);
+
+      if (!requesterId || (!isPayer && !isLeader)) {
         throw new Error(
-          "Unauthorized: only the payer can update this expense."
+          "Unauthorized: only the payer or journey leader can update this expense.",
         );
       }
+
+      const before = {
+        payerId: String(expense.payerId),
+        totalAmount: expense.totalAmount,
+        description: expense.description,
+        splits: expense.splits.map((s) => ({
+          userId: String(s.userId),
+          baseAmount: s.baseAmount,
+          deduction: s.deduction || 0,
+          reason: s.reason,
+        })),
+      };
 
       if (payerId) expense.payerId = new mongoose.Types.ObjectId(payerId);
       if (description) expense.description = description;
@@ -169,22 +199,22 @@ const expenseResolvers = {
           // Validate total matches the sum of base amounts and deductions
           const sumBase = expense.splits.reduce(
             (acc: number, s) => acc + (s.baseAmount || 0),
-            0
+            0,
           );
           const sumDeductions = expense.splits.reduce(
             (acc: number, s) => acc + (s.deduction || 0),
-            0
+            0,
           );
           const totalFromSplits = sumBase + sumDeductions;
           if (Math.abs(totalFromSplits - totalAmount) > 0.01) {
             throw new Error(
               `The sum of splits (base: ${sumBase.toFixed(
-                2
+                2,
               )}, deductions: ${sumDeductions.toFixed(
-                2
+                2,
               )}, total: ${totalFromSplits.toFixed(
-                2
-              )}) must equal the total amount (${totalAmount.toFixed(2)})`
+                2,
+              )}) must equal the total amount (${totalAmount.toFixed(2)})`,
             );
           }
           expense.totalAmount = totalAmount;
@@ -212,31 +242,84 @@ const expenseResolvers = {
       // Refresh expiration on activity
       await refreshJourneyExpiration(expense.journeyId.toString());
 
+      await logJourneyAction({
+        journeyId: expense.journeyId,
+        action: "EXPENSE_UPDATED",
+        actorId: requesterId,
+        targetType: "expense",
+        targetId: expenseId,
+        details: `Expense: ${expense.description}`,
+        metadata: {
+          before,
+          after: {
+            payerId: String(expense.payerId),
+            totalAmount: expense.totalAmount,
+            description: expense.description,
+            splits: expense.splits.map((s) => ({
+              userId: String(s.userId),
+              baseAmount: s.baseAmount,
+              deduction: s.deduction || 0,
+              reason: s.reason,
+            })),
+          },
+        },
+        expireAt: journey.expireAt,
+      });
+
       return await expense.populate("payerId");
     },
     deleteExpense: async (
       _: unknown,
       { expenseId }: { expenseId: string },
-      context: { user?: { userId?: string } }
+      context: { user?: { userId?: string } },
     ) => {
       await dbConnect();
       const expense = await Expense.findById(expenseId);
       if (!expense) throw new Error("Expense not found");
 
-      await checkJourneyLock(expense.journeyId.toString());
+      const journey = await checkJourneyLock(expense.journeyId.toString());
 
       const requesterId = context?.user?.userId;
-      if (!requesterId || String(requesterId) !== String(expense.payerId)) {
+      const isPayer =
+        !!requesterId && String(requesterId) === String(expense.payerId);
+      const isLeader =
+        !!requesterId && String(requesterId) === String(journey.leaderId);
+
+      if (!requesterId || (!isPayer && !isLeader)) {
         throw new Error(
-          "Unauthorized: only the payer can delete this expense."
+          "Unauthorized: only the payer or journey leader can delete this expense.",
         );
       }
 
       const journeyId = expense.journeyId.toString();
+
+      const before = {
+        payerId: String(expense.payerId),
+        totalAmount: expense.totalAmount,
+        description: expense.description,
+        splits: expense.splits.map((s) => ({
+          userId: String(s.userId),
+          baseAmount: s.baseAmount,
+          deduction: s.deduction || 0,
+          reason: s.reason,
+        })),
+      };
+
       await Expense.findByIdAndDelete(expenseId);
 
       // Refresh expiration on activity
       await refreshJourneyExpiration(journeyId);
+
+      await logJourneyAction({
+        journeyId,
+        action: "EXPENSE_DELETED",
+        actorId: requesterId,
+        targetType: "expense",
+        targetId: expenseId,
+        details: `Expense: ${expense.description}`,
+        metadata: { before },
+        expireAt: journey.expireAt,
+      });
 
       return true;
     },

@@ -29,11 +29,25 @@ const typeDefs = gql`
     status: String!
     createdAt: String!
     expireAt: String
-    expenses: [Expense]
+    expenses(offset: Int, limit: Int): [Expense]
     hasPassword: Boolean
     requireApproval: Boolean
     isLocked: Boolean
     isInputLocked: Boolean
+    actionLogs: [ActionLog!]!
+  }
+
+  type ActionLog {
+    id: ID!
+    journeyId: ID!
+    actor: User
+    actorName: String
+    action: String!
+    targetType: String
+    targetId: String
+    details: String
+    metadata: String
+    createdAt: String!
   }
 
   type Split {
@@ -63,6 +77,7 @@ const typeDefs = gql`
   type Query {
     getJourneyDetails(slug: String!): Journey
     getUserJourneys: [Journey]
+    getJourneyActions(journeyId: ID!, limit: Int): [ActionLog!]!
     getUsers: [User]
     me: User
   }
@@ -72,6 +87,12 @@ const typeDefs = gql`
     createJourney(
       leaderId: ID!
       name: String!
+      startDate: String
+      endDate: String
+    ): Journey
+    updateJourney(
+      journeyId: ID!
+      name: String
       startDate: String
       endDate: String
     ): Journey

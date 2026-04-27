@@ -8,8 +8,10 @@ import dbConnect from "../../mongodb";
 import Journey, { IJourney } from "../../models/Journey";
 import Expense from "../../models/Expense";
 import User from "../../models/User";
+import ActionLog from "../../models/ActionLog";
 import { rlCreateJourney } from "../../rateLimiter";
 import { getRateLimiterKey } from "../../utils/limiterKey";
+import { logJourneyAction } from "../../utils/actionLog";
 
 type GraphQLContext = {
   user?: { userId?: string };
@@ -23,12 +25,54 @@ import {
   calculateJwtExpiration,
 } from "../../utils/expiration";
 
+const DATE_ONLY_REGEX = /^\d{4}-\d{2}-\d{2}$/;
+
+const normalizeDateInput = (
+  value?: string,
+  mode: "start" | "end" = "start",
+): Date | undefined => {
+  if (!value) return undefined;
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return undefined;
+
+  if (!DATE_ONLY_REGEX.test(value)) {
+    return parsed;
+  }
+
+  const normalized = new Date(parsed);
+  if (mode === "end") {
+    normalized.setUTCHours(23, 59, 59, 999);
+  } else {
+    normalized.setUTCHours(0, 0, 0, 0);
+  }
+  return normalized;
+};
+
+const getJourneyWithLeaderCheck = async (
+  journeyId: string,
+  context: GraphQLContext,
+  leaderError = "Only the leader can perform this action",
+) => {
+  const userId = context?.user?.userId;
+  if (!userId) throw new Error("Unauthorized");
+
+  const journey = await Journey.findById(journeyId);
+  if (!journey) throw new Error("Journey not found");
+
+  if (journey.leaderId.toString() !== userId) {
+    throw new Error(leaderError);
+  }
+
+  return { journey, userId };
+};
+
 const journeyResolvers = {
   Query: {
     getJourneyDetails: async (
       _: unknown,
       { slug }: { slug: string },
-      context: GraphQLContext
+      context: GraphQLContext,
     ) => {
       await dbConnect();
       const userId = context?.user?.userId;
@@ -47,7 +91,7 @@ const journeyResolvers = {
       const isLeader =
         (journey.leaderId as any)._id.toString() === userId.toString();
       const isMember = journey.members.some(
-        (m: any) => m._id.toString() === userId.toString()
+        (m: any) => m._id.toString() === userId.toString(),
       );
 
       if (!isLeader && !isMember) {
@@ -67,7 +111,7 @@ const journeyResolvers = {
     getUserJourneys: async (
       _: unknown,
       __: unknown,
-      context: GraphQLContext
+      context: GraphQLContext,
     ) => {
       await dbConnect();
       const userId = context?.user?.userId;
@@ -77,6 +121,27 @@ const journeyResolvers = {
         "members",
       ]);
       return journeys.map((j) => ({ ...j.toObject(), id: j._id }));
+    },
+    getJourneyActions: async (
+      _: unknown,
+      { journeyId, limit = 50 }: { journeyId: string; limit?: number },
+      context: GraphQLContext,
+    ) => {
+      await dbConnect();
+      const userId = context?.user?.userId;
+      if (!userId) throw new Error("Unauthorized");
+
+      const journey = await Journey.findById(journeyId);
+      if (!journey) throw new Error("Journey not found");
+
+      const isLeader = journey.leaderId.toString() === userId;
+      const isMember = journey.members.some((id) => id.toString() === userId);
+      if (!isLeader && !isMember) throw new Error("Unauthorized");
+
+      const safeLimit = Math.max(1, Math.min(limit, 200));
+      return await ActionLog.find({ journeyId })
+        .sort({ createdAt: -1 })
+        .limit(safeLimit);
     },
   },
   Mutation: {
@@ -93,7 +158,7 @@ const journeyResolvers = {
         startDate?: string;
         endDate?: string;
       },
-      context: GraphQLContext
+      context: GraphQLContext,
     ) => {
       await dbConnect();
 
@@ -109,17 +174,19 @@ const journeyResolvers = {
       }
 
       const slug = `${slugify(name, { lower: true, strict: true })}-${nanoid(
-        6
+        6,
       )}`;
-      const baseDate = endDate ? new Date(endDate) : new Date();
+      const normalizedStartDate = normalizeDateInput(startDate, "start");
+      const normalizedEndDate = normalizeDateInput(endDate, "end");
+      const baseDate = normalizedEndDate ?? new Date();
       const expireAt = new Date(baseDate.getTime() + 5 * 24 * 60 * 60 * 1000);
 
       const newJourney = new Journey({
         leaderId,
         name,
         slug,
-        startDate,
-        endDate,
+        startDate: normalizedStartDate,
+        endDate: normalizedEndDate,
         members: [leaderId],
         status: "active",
         expireAt,
@@ -127,11 +194,92 @@ const journeyResolvers = {
 
       await newJourney.save();
 
+      await logJourneyAction({
+        journeyId: newJourney._id,
+        action: "JOURNEY_CREATED",
+        actorId: leaderId,
+        targetType: "journey",
+        targetId: newJourney._id.toString(),
+        details: "Journey created",
+        expireAt,
+      });
+
       return await newJourney.populate(["leaderId", "members"]);
+    },
+    updateJourney: async (
+      _: unknown,
+      {
+        journeyId,
+        name,
+        startDate,
+        endDate,
+      }: {
+        journeyId: string;
+        name?: string;
+        startDate?: string;
+        endDate?: string;
+      },
+      context: GraphQLContext,
+    ) => {
+      await dbConnect();
+      const { journey, userId } = await getJourneyWithLeaderCheck(
+        journeyId,
+        context,
+        "Only the leader can update this journey",
+      );
+
+      const before = {
+        name: journey.name,
+        startDate: journey.startDate,
+        endDate: journey.endDate,
+      };
+
+      if (typeof name === "string" && name.trim()) {
+        journey.name = name.trim();
+      }
+
+      if (typeof startDate === "string") {
+        const normalized = normalizeDateInput(startDate, "start");
+        if (normalized) {
+          journey.startDate = normalized;
+        }
+      }
+
+      if (typeof endDate === "string") {
+        const normalized = normalizeDateInput(endDate, "end");
+        if (normalized) {
+          journey.endDate = normalized;
+          journey.expireAt = new Date(
+            normalized.getTime() + 5 * 24 * 60 * 60 * 1000,
+          );
+        }
+      }
+
+      await journey.save();
+
+      await logJourneyAction({
+        journeyId: journey._id,
+        action: "JOURNEY_UPDATED",
+        actorId: userId,
+        targetType: "journey",
+        targetId: journey._id.toString(),
+        details: "Journey settings updated",
+        metadata: {
+          before,
+          after: {
+            name: journey.name,
+            startDate: journey.startDate,
+            endDate: journey.endDate,
+          },
+        },
+        expireAt: journey.expireAt,
+      });
+
+      return await journey.populate(["leaderId", "members", "pendingMembers"]);
     },
     joinJourney: async (
       _: unknown,
-      { journeyId, userId }: { journeyId: string; userId: string }
+      { journeyId, userId }: { journeyId: string; userId: string },
     ) => {
       await dbConnect();
       let journey;
@@ -144,7 +292,7 @@ const journeyResolvers = {
       if (!journey) throw new Error("Journey not found");
 
       const isMember = journey.members.some(
-        (memberId) => memberId.toString() === userId
+        (memberId) => memberId.toString() === userId,
       );
 
       if (!isMember) {
@@ -160,7 +308,7 @@ const journeyResolvers = {
         journeyId,
         leaderTimezoneOffsetMinutes,
       }: { journeyId: string; leaderTimezoneOffsetMinutes?: number },
-      context: GraphQLContext
+      context: GraphQLContext,
     ) => {
       await dbConnect();
       const userId = context?.user?.userId;
@@ -180,7 +328,7 @@ const journeyResolvers = {
           if (offsetMins > maxOffsetMinutes || offsetMins < minOffsetMinutes) {
             offsetMins = Math.max(
               Math.min(offsetMins, maxOffsetMinutes),
-              minOffsetMinutes
+              minOffsetMinutes,
             );
           }
           const offsetMs = offsetMins * 60 * 1000;
@@ -194,7 +342,7 @@ const journeyResolvers = {
 
         await Expense.updateMany(
           { journeyId: journey._id },
-          { $set: { expireAt: deletionTime } }
+          { $set: { expireAt: deletionTime } },
         );
 
         const guestMembers = await User.find({
@@ -206,7 +354,7 @@ const journeyResolvers = {
         if (guestIds.length > 0) {
           await User.updateMany(
             { _id: { $in: guestIds } },
-            { $set: { expireAt: deletionTime } }
+            { $set: { expireAt: deletionTime } },
           );
         }
 
@@ -234,12 +382,12 @@ const journeyResolvers = {
 
         if (!journeyEnded) {
           throw new Error(
-            "Members cannot leave until the journey ends or the leader has left"
+            "Members cannot leave until the journey ends or the leader has left",
           );
         }
 
         journey.members = journey.members.filter(
-          (id) => id.toString() !== userId
+          (id) => id.toString() !== userId,
         );
         await journey.save();
 
@@ -273,11 +421,15 @@ const journeyResolvers = {
     },
     generateJoinToken: async (
       _: unknown,
-      { journeyId }: { journeyId: string }
+      { journeyId }: { journeyId: string },
+      context: GraphQLContext,
     ) => {
       await dbConnect();
-      const journey = await Journey.findById(journeyId);
-      if (!journey) throw new Error("Journey not found");
+      const { journey, userId } = await getJourneyWithLeaderCheck(
+        journeyId,
+        context,
+        "Only the leader can generate join links",
+      );
 
       const jti = nanoid();
       const expiresIn = 5 * 60 * 1000; // 5 minutes
@@ -288,10 +440,21 @@ const journeyResolvers = {
       journey.joinTokenUsed = false; // Reset used status, though we don't enforce single-use anymore
       await journey.save();
 
+      await logJourneyAction({
+        journeyId,
+        action: "JOIN_TOKEN_GENERATED",
+        actorId: userId,
+        targetType: "journey",
+        targetId: journeyId,
+        details: "Generated new join token",
+        metadata: { expiresAt },
+        expireAt: journey.expireAt,
+      });
+
       const token = jwt.sign(
         { journeyId, type: "join_token", jti },
         process.env.NEXTAUTH_SECRET!,
-        { expiresIn: "5m" }
+        { expiresIn: "5m" },
       );
       return token;
     },
@@ -302,7 +465,7 @@ const journeyResolvers = {
         name,
         password,
       }: { token: string; name?: string; password?: string },
-      context: GraphQLContext
+      context: GraphQLContext,
     ) => {
       await dbConnect();
 
@@ -386,7 +549,7 @@ const journeyResolvers = {
         });
 
         const nameExists = existingUsers.some(
-          (u) => u.name.toLowerCase() === name.trim().toLowerCase()
+          (u) => u.name.toLowerCase() === name.trim().toLowerCase(),
         );
 
         if (nameExists) {
@@ -411,7 +574,7 @@ const journeyResolvers = {
 
       // Check if already a member
       const isMember = journey.members.some(
-        (memberId: mongoose.Types.ObjectId) => memberId.toString() === userId
+        (memberId: mongoose.Types.ObjectId) => memberId.toString() === userId,
       );
 
       if (isMember) {
@@ -420,7 +583,7 @@ const journeyResolvers = {
         const authToken = jwt.sign(
           { userId: user._id, email: user.email },
           process.env.JWT_SECRET || "fallback_secret",
-          { expiresIn }
+          { expiresIn },
         );
         return {
           token: authToken,
@@ -434,7 +597,7 @@ const journeyResolvers = {
       // Check approval
       if (journey.requireApproval) {
         const isPending = journey.pendingMembers.some(
-          (id: mongoose.Types.ObjectId) => id.toString() === userId
+          (id: mongoose.Types.ObjectId) => id.toString() === userId,
         );
         if (!isPending) {
           journey.pendingMembers.push(new mongoose.Types.ObjectId(userId!));
@@ -449,7 +612,7 @@ const journeyResolvers = {
         const authToken = jwt.sign(
           { userId: user._id, email: user.email },
           process.env.JWT_SECRET,
-          { expiresIn }
+          { expiresIn },
         );
 
         return {
@@ -472,7 +635,7 @@ const journeyResolvers = {
       const authToken = jwt.sign(
         { userId: user._id, email: user.email },
         process.env.JWT_SECRET,
-        { expiresIn }
+        { expiresIn },
       );
 
       return {
@@ -488,11 +651,15 @@ const journeyResolvers = {
     },
     setJourneyPassword: async (
       _: unknown,
-      { journeyId, password }: { journeyId: string; password?: string }
+      { journeyId, password }: { journeyId: string; password?: string },
+      context: GraphQLContext,
     ) => {
       await dbConnect();
-      const journey = await Journey.findById(journeyId);
-      if (!journey) throw new Error("Journey not found");
+      const { journey, userId } = await getJourneyWithLeaderCheck(
+        journeyId,
+        context,
+        "Only the leader can update journey password",
+      );
 
       if (password) {
         const hashedPassword = await bcrypt.hash(password, 10);
@@ -501,6 +668,17 @@ const journeyResolvers = {
         journey.password = undefined;
       }
       await journey.save();
+
+      await logJourneyAction({
+        journeyId,
+        action: "JOURNEY_PASSWORD_UPDATED",
+        actorId: userId,
+        targetType: "journey",
+        targetId: journeyId,
+        details: password ? "Journey password set" : "Journey password removed",
+        expireAt: journey.expireAt,
+      });
+
       return true;
     },
     toggleApprovalRequirement: async (
@@ -508,20 +686,38 @@ const journeyResolvers = {
       {
         journeyId,
         requireApproval,
-      }: { journeyId: string; requireApproval: boolean }
+      }: { journeyId: string; requireApproval: boolean },
+      context: GraphQLContext,
     ) => {
       await dbConnect();
-      const journey = await Journey.findById(journeyId);
-      if (!journey) throw new Error("Journey not found");
+      const { journey, userId } = await getJourneyWithLeaderCheck(
+        journeyId,
+        context,
+        "Only the leader can change approval requirement",
+      );
 
       journey.requireApproval = requireApproval;
       await journey.save();
+
+      await logJourneyAction({
+        journeyId,
+        action: "APPROVAL_REQUIREMENT_TOGGLED",
+        actorId: userId,
+        targetType: "journey",
+        targetId: journeyId,
+        details: requireApproval
+          ? "Join approval enabled"
+          : "Join approval disabled",
+        metadata: { requireApproval },
+        expireAt: journey.expireAt,
+      });
+
       return journey;
     },
     toggleJourneyLock: async (
       _: unknown,
       { journeyId, isLocked }: { journeyId: string; isLocked: boolean },
-      context: GraphQLContext
+      context: GraphQLContext,
     ) => {
       await dbConnect();
       const userId = context?.user?.userId;
@@ -536,6 +732,18 @@ const journeyResolvers = {
 
       journey.isLocked = isLocked;
       await journey.save();
+
+      await logJourneyAction({
+        journeyId,
+        action: "JOURNEY_LOCK_TOGGLED",
+        actorId: userId,
+        targetType: "journey",
+        targetId: journeyId,
+        details: isLocked ? "Journey locked" : "Journey unlocked",
+        metadata: { isLocked },
+        expireAt: journey.expireAt,
+      });
+
       return journey;
     },
     toggleJourneyInputLock: async (
@@ -544,7 +752,7 @@ const journeyResolvers = {
         journeyId,
         isInputLocked,
       }: { journeyId: string; isInputLocked: boolean },
-      context: GraphQLContext
+      context: GraphQLContext,
     ) => {
       await dbConnect();
       const userId = context?.user?.userId;
@@ -559,19 +767,37 @@ const journeyResolvers = {
 
       journey.isInputLocked = isInputLocked;
       await journey.save();
+
+      await logJourneyAction({
+        journeyId,
+        action: "JOURNEY_INPUT_LOCK_TOGGLED",
+        actorId: userId,
+        targetType: "journey",
+        targetId: journeyId,
+        details: isInputLocked
+          ? "Journey input locked"
+          : "Journey input unlocked",
+        metadata: { isInputLocked },
+        expireAt: journey.expireAt,
+      });
+
       return journey;
     },
     approveJoinRequest: async (
       _: unknown,
-      { journeyId, userId }: { journeyId: string; userId: string }
+      { journeyId, userId }: { journeyId: string; userId: string },
+      context: GraphQLContext,
     ) => {
       await dbConnect();
-      const journey = await Journey.findById(journeyId);
-      if (!journey) throw new Error("Journey not found");
+      const { journey, userId: actorId } = await getJourneyWithLeaderCheck(
+        journeyId,
+        context,
+        "Only the leader can approve join requests",
+      );
 
       // Remove from pending
       journey.pendingMembers = journey.pendingMembers.filter(
-        (id) => id.toString() !== userId
+        (id) => id.toString() !== userId,
       );
 
       // Remove from rejected if present (allowing re-approval if manually done?)
@@ -579,7 +805,7 @@ const journeyResolvers = {
       // For now, let's just ensure they are not in rejected list if we approve them.
       if (journey.rejectedMembers) {
         journey.rejectedMembers = journey.rejectedMembers.filter(
-          (id) => id.toString() !== userId
+          (id) => id.toString() !== userId,
         );
       }
 
@@ -589,18 +815,33 @@ const journeyResolvers = {
       }
 
       await journey.save();
+
+      await logJourneyAction({
+        journeyId,
+        action: "JOIN_REQUEST_APPROVED",
+        actorId,
+        targetType: "user",
+        targetId: userId,
+        details: "Approved a pending join request",
+        expireAt: journey.expireAt,
+      });
+
       return await journey.populate(["members", "pendingMembers"]);
     },
     rejectJoinRequest: async (
       _: unknown,
-      { journeyId, userId }: { journeyId: string; userId: string }
+      { journeyId, userId }: { journeyId: string; userId: string },
+      context: GraphQLContext,
     ) => {
       await dbConnect();
-      const journey = await Journey.findById(journeyId);
-      if (!journey) throw new Error("Journey not found");
+      const { journey, userId: actorId } = await getJourneyWithLeaderCheck(
+        journeyId,
+        context,
+        "Only the leader can reject join requests",
+      );
 
       journey.pendingMembers = journey.pendingMembers.filter(
-        (id) => id.toString() !== userId
+        (id) => id.toString() !== userId,
       );
 
       // Add to rejected list
@@ -610,15 +851,30 @@ const journeyResolvers = {
       }
 
       await journey.save();
+
+      await logJourneyAction({
+        journeyId,
+        action: "JOIN_REQUEST_REJECTED",
+        actorId,
+        targetType: "user",
+        targetId: userId,
+        details: "Rejected a pending join request",
+        expireAt: journey.expireAt,
+      });
+
       return await journey.populate("pendingMembers");
     },
     approveAllJoinRequests: async (
       _: unknown,
-      { journeyId }: { journeyId: string }
+      { journeyId }: { journeyId: string },
+      context: GraphQLContext,
     ) => {
       await dbConnect();
-      const journey = await Journey.findById(journeyId);
-      if (!journey) throw new Error("Journey not found");
+      const { journey, userId } = await getJourneyWithLeaderCheck(
+        journeyId,
+        context,
+        "Only the leader can approve join requests",
+      );
 
       const pendingIds = journey.pendingMembers;
 
@@ -632,15 +888,31 @@ const journeyResolvers = {
       journey.pendingMembers = [];
 
       await journey.save();
+
+      await logJourneyAction({
+        journeyId,
+        action: "ALL_JOIN_REQUESTS_APPROVED",
+        actorId: userId,
+        targetType: "journey",
+        targetId: journeyId,
+        details: "Approved all pending join requests",
+        metadata: { approvedCount: pendingIds.length },
+        expireAt: journey.expireAt,
+      });
+
       return await journey.populate(["members", "pendingMembers"]);
     },
     rejectAllJoinRequests: async (
       _: unknown,
-      { journeyId }: { journeyId: string }
+      { journeyId }: { journeyId: string },
+      context: GraphQLContext,
     ) => {
       await dbConnect();
-      const journey = await Journey.findById(journeyId);
-      if (!journey) throw new Error("Journey not found");
+      const { journey, userId } = await getJourneyWithLeaderCheck(
+        journeyId,
+        context,
+        "Only the leader can reject join requests",
+      );
 
       const pendingIds = journey.pendingMembers;
 
@@ -657,13 +929,25 @@ const journeyResolvers = {
       journey.pendingMembers = [];
 
       await journey.save();
+
+      await logJourneyAction({
+        journeyId,
+        action: "ALL_JOIN_REQUESTS_REJECTED",
+        actorId: userId,
+        targetType: "journey",
+        targetId: journeyId,
+        details: "Rejected all pending join requests",
+        metadata: { rejectedCount: pendingIds.length },
+        expireAt: journey.expireAt,
+      });
+
       return await journey.populate("pendingMembers");
     },
 
     removeMember: async (
       _: unknown,
       { journeyId, memberId }: { journeyId: string; memberId: string },
-      context: GraphQLContext
+      context: GraphQLContext,
     ) => {
       await dbConnect();
       const currentUserId = context?.user?.userId;
@@ -681,7 +965,7 @@ const journeyResolvers = {
       }
 
       journey.members = journey.members.filter(
-        (id) => id.toString() !== memberId
+        (id) => id.toString() !== memberId,
       );
 
       // Also add to rejected list so they can't immediately rejoin if that's desired behavior?
@@ -695,14 +979,31 @@ const journeyResolvers = {
 
       await journey.save();
 
+      await logJourneyAction({
+        journeyId,
+        action: "MEMBER_REMOVED",
+        actorId: currentUserId,
+        targetType: "user",
+        targetId: memberId,
+        details: "Removed member from journey",
+        expireAt: journey.expireAt,
+      });
+
       return await journey.populate(["members", "pendingMembers"]);
     },
   },
   Journey: {
-    expenses: async (parent: IJourney) => {
+    expenses: async (parent: IJourney, { offset = 0, limit = 0 }: { offset?: number; limit?: number }) => {
       await dbConnect();
-      const expenses = await Expense.aggregate([
+      const pipeline: any[] = [
         { $match: { journeyId: parent._id } },
+        { $sort: { createdAt: -1 } }
+      ];
+
+      if (offset > 0) pipeline.push({ $skip: offset });
+      if (limit > 0) pipeline.push({ $limit: limit });
+
+      pipeline.push(
         {
           $addFields: {
             hasImage: {
@@ -711,15 +1012,43 @@ const journeyResolvers = {
             id: "$_id",
           },
         },
-        { $project: { imageBinary: 0 } },
-      ]);
+        { $project: { imageBinary: 0 } }
+      );
+
+      const expenses = await Expense.aggregate(pipeline);
 
       await Expense.populate(expenses, { path: "payerId" });
       await Expense.populate(expenses, { path: "splits.userId" });
 
       return expenses;
     },
+    actionLogs: async (parent: IJourney) => {
+      await dbConnect();
+      return await ActionLog.find({ journeyId: parent._id })
+        .sort({ createdAt: -1 })
+        .limit(100);
+    },
     leader: (parent: IJourney) => parent.leaderId,
+  },
+  ActionLog: {
+    id: (parent: { _id: mongoose.Types.ObjectId; id?: string }) =>
+      parent.id || parent._id.toString(),
+    journeyId: (parent: { journeyId: mongoose.Types.ObjectId | string }) =>
+      parent.journeyId.toString(),
+    actor: async (parent: { actorId?: mongoose.Types.ObjectId | string }) => {
+      if (!parent.actorId) return null;
+      return await User.findById(parent.actorId);
+    },
+    actorName: async (parent: { actorName?: string; actorId?: mongoose.Types.ObjectId | string }) => {
+      if (parent.actorName) return parent.actorName;
+      if (!parent.actorId) return "System";
+      const user = await User.findById(parent.actorId);
+      return user ? user.name : "System";
+    },
+    metadata: (parent: { metadata?: any }) => {
+      if (!parent.metadata) return null;
+      return JSON.stringify(parent.metadata);
+    }
   },
 };
 

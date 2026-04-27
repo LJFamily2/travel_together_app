@@ -13,6 +13,9 @@ jest.mock("../lib/models/User");
 jest.mock("jsonwebtoken");
 jest.mock("bcryptjs");
 jest.mock("nanoid", () => ({ nanoid: jest.fn(() => "fixed-jti") }));
+jest.mock("../lib/utils/actionLog", () => ({
+  logJourneyAction: jest.fn().mockResolvedValue(undefined),
+}));
 
 jest.mock("../lib/utils/expiration", () => ({
   refreshJourneyExpiration: jest.fn(),
@@ -36,6 +39,7 @@ describe("Join Flow Security Tests", () => {
       // 1. Setup Journey Mock (Initially approval OFF)
       const mockJourneyInstance: any = {
         _id: mockJourneyId,
+        leaderId: "leader-1",
         slug: "test-journey",
         requireApproval: false,
         members: [],
@@ -49,7 +53,8 @@ describe("Join Flow Security Tests", () => {
       // 2. Toggle Approval ON
       await toggleApprovalRequirement(
         {},
-        { journeyId: mockJourneyId, requireApproval: true }
+        { journeyId: mockJourneyId, requireApproval: true },
+        { user: { userId: "leader-1" } },
       );
 
       expect(mockJourneyInstance.requireApproval).toBe(true);
@@ -80,7 +85,7 @@ describe("Join Flow Security Tests", () => {
       const result = await joinJourneyViaToken(
         {},
         { token: mockToken, name: "Guest Pending" },
-        {}
+        {},
       );
 
       // 5. Verify Result
@@ -103,7 +108,7 @@ describe("Join Flow Security Tests", () => {
       const resultRetry = await joinJourneyViaToken(
         {},
         { token: mockToken, name: "Guest Pending" },
-        { user: { userId } }
+        { user: { userId } },
       );
 
       expect(resultRetry.isPending).toBe(true);

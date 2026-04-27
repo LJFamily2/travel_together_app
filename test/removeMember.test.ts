@@ -5,6 +5,9 @@ import Journey from "../lib/models/Journey";
 jest.mock("../lib/mongodb", () => jest.fn());
 jest.mock("../lib/models/Journey");
 jest.mock("nanoid", () => ({ nanoid: jest.fn(() => "fixed-id") }));
+jest.mock("../lib/utils/actionLog", () => ({
+  logJourneyAction: jest.fn().mockResolvedValue(undefined),
+}));
 
 describe("Journey Resolvers - removeMember", () => {
   const { removeMember } = journeyResolvers.Mutation;
@@ -32,7 +35,7 @@ describe("Journey Resolvers - removeMember", () => {
     await removeMember(
       {},
       { journeyId: mockJourneyId, memberId: mockMemberId },
-      context
+      context,
     );
 
     expect(Journey.findById).toHaveBeenCalledWith(mockJourneyId);
@@ -59,8 +62,8 @@ describe("Journey Resolvers - removeMember", () => {
       removeMember(
         {},
         { journeyId: mockJourneyId, memberId: mockMemberId },
-        context
-      )
+        context,
+      ),
     ).rejects.toThrow("Only the leader can remove members");
   });
 
@@ -81,8 +84,8 @@ describe("Journey Resolvers - removeMember", () => {
       removeMember(
         {},
         { journeyId: mockJourneyId, memberId: mockLeaderId },
-        context
-      )
+        context,
+      ),
     ).rejects.toThrow("Leader cannot be removed");
   });
 });

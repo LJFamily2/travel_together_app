@@ -150,10 +150,10 @@ export default function JourneySettingsModal({
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
-      <div className="bg-white rounded-3xl p-6 md:p-8 w-full max-w-md shadow-xl relative animate-in fade-in zoom-in duration-200">
+      <div className="bg-white rounded-3xl p-6 md:p-8 w-full max-w-md shadow-xl relative animate-in fade-in zoom-in duration-200 flex flex-col max-h-[90vh]">
         <button
           onClick={onClose}
-          className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors cursor-pointer"
+          className="absolute top-4 right-4 z-10 bg-white/80 rounded-full p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors cursor-pointer"
         >
           <svg
             className="w-6 h-6"
@@ -170,11 +170,11 @@ export default function JourneySettingsModal({
           </svg>
         </button>
 
-        <h2 className="text-2xl font-bold mb-6 text-gray-900">
+        <h2 className="text-2xl font-bold mb-6 text-gray-900 shrink-0 pr-8">
           Journey Settings
         </h2>
 
-        <div className="space-y-6">
+        <div className="space-y-6 overflow-y-auto custom-scrollbar flex-1 pr-2 pb-2">
           {/* Lock Journey Invitation Toggle */}
           <div className="bg-gray-50 p-4 rounded-2xl border border-gray-100 flex items-center justify-between">
             <div>
@@ -324,10 +324,10 @@ export default function JourneySettingsModal({
           </div>
         </div>
 
-        <div className="flex justify-end mt-8">
+        <div className="flex justify-end pt-6 mt-2 shrink-0 border-t border-gray-100">
           <button
             onClick={onClose}
-            className="px-6 py-2.5 text-gray-600 hover:bg-gray-100 rounded-full font-medium transition-colors cursor-pointer"
+            className="px-6 py-2.5 bg-black text-white hover:bg-gray-800 rounded-full font-medium transition-colors cursor-pointer"
           >
             Done
           </button>

@@ -74,7 +74,7 @@ const userResolvers = {
       }
 
       // Check if name is taken in this journey
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+       
       const isNameTaken = (journey.members as any[]).some(
         (member: { name: string }) =>
           member.name.toLowerCase() === name.toLowerCase()
@@ -139,7 +139,7 @@ const userResolvers = {
 
       // Check if name taken
       await journey.populate({ path: "members", select: "name" });
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+       
       const isNameTaken = (journey.members as any[]).some(
         (member: { name: string }) =>
           member.name.toLowerCase() === name.toLowerCase()
@@ -184,12 +184,16 @@ const userResolvers = {
       await dbConnect();
       if (!context.user?.userId) throw new Error("Unauthorized");
 
+      const requesterId = context.user.userId;
       const journey = await Journey.findById(journeyId);
       if (!journey) throw new Error("Journey not found");
 
-      // Check if leader
-      if (journey.leaderId.toString() !== context.user.userId) {
-        throw new Error("Only the leader can manage guest users");
+      const isLeader = journey.leaderId.toString() === requesterId;
+      const isSelf = requesterId === userId;
+
+      // A guest can only regenerate their own token; a leader can regenerate any guest's token
+      if (!isLeader && !isSelf) {
+        throw new Error("Only the leader or the guest themselves can regenerate this link");
       }
 
       const user = await User.findById(userId);
@@ -197,7 +201,7 @@ const userResolvers = {
       if (!user.isGuest) throw new Error("User is not a guest");
 
       // Verify user is in journey
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+       
       if (!journey.members.some((m: any) => m.toString() === userId)) {
         throw new Error("User is not in this journey");
       }
@@ -229,7 +233,7 @@ const userResolvers = {
 
       let decoded: any;
       try {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+         
         decoded = jwt.verify(token, process.env.JWT_SECRET) as any;
       } catch (error) {
         throw new Error("Invalid or expired token");

@@ -10,6 +10,9 @@ jest.mock("../lib/models/Journey");
 jest.mock("../lib/models/User");
 jest.mock("jsonwebtoken");
 jest.mock("nanoid", () => ({ nanoid: jest.fn(() => "fixed-jti") }));
+jest.mock("../lib/utils/actionLog", () => ({
+  logJourneyAction: jest.fn().mockResolvedValue(undefined),
+}));
 
 describe("Journey Token Resolvers", () => {
   const { generateJoinToken, joinJourneyViaToken } = journeyResolvers.Mutation;
@@ -26,6 +29,7 @@ describe("Journey Token Resolvers", () => {
     const mockJourneyId = "journey-123";
     const mockJourneyInstance: any = {
       _id: mockJourneyId,
+      leaderId: "leader-1",
       save: jest.fn().mockResolvedValue(true),
       joinTokenJti: null,
       joinTokenExpiresAt: null,
@@ -33,7 +37,11 @@ describe("Journey Token Resolvers", () => {
     (Journey.findById as jest.Mock).mockResolvedValue(mockJourneyInstance);
     (jwt.sign as jest.Mock).mockReturnValue("mock-join-token");
 
-    const token = await generateJoinToken({}, { journeyId: mockJourneyId });
+    const token = await generateJoinToken(
+      {},
+      { journeyId: mockJourneyId },
+      { user: { userId: "leader-1" } },
+    );
     expect(Journey.findById).toHaveBeenCalledWith(mockJourneyId);
     expect(nanoid).toHaveBeenCalled();
     // ensure we attempt to persist joinTokenJti/expires
@@ -46,9 +54,26 @@ describe("Journey Token Resolvers", () => {
         jti: expect.any(String),
       }),
       expect.any(String),
-      { expiresIn: "5m" }
+      { expiresIn: "5m" },
     );
     expect(token).toBe("mock-join-token");
+  });
+
+  it("should reject join token generation for non-leader", async () => {
+    const mockJourneyId = "journey-unauthorized";
+    const mockJourneyInstance: any = {
+      _id: mockJourneyId,
+      leaderId: "leader-1",
+    };
+    (Journey.findById as jest.Mock).mockResolvedValue(mockJourneyInstance);
+
+    await expect(
+      generateJoinToken(
+        {},
+        { journeyId: mockJourneyId },
+        { user: { userId: "member-2" } },
+      ),
+    ).rejects.toThrow("Only the leader can generate join links");
   });
 
   it("should allow join via token for guest", async () => {
@@ -94,14 +119,14 @@ describe("Journey Token Resolvers", () => {
     const result = await joinJourneyViaToken(
       {},
       { token: mockToken, name: "Guest" },
-      {}
+      {},
     );
 
     expect(Journey.findOne).toHaveBeenCalledWith(
       expect.objectContaining({
         _id: mockJourneyId,
         joinTokenJti: mockJti,
-      })
+      }),
     );
 
     // guest user created
@@ -150,13 +175,13 @@ describe("Journey Token Resolvers", () => {
     const result = await joinJourneyViaToken(
       {},
       { token: mockToken, name: "GuestJti" },
-      {}
+      {},
     );
 
     expect(Journey.findOne).toHaveBeenCalledWith(
       expect.objectContaining({
         joinTokenJti: mockJti,
-      })
+      }),
     );
     expect(mockJourneyInstance.save).toHaveBeenCalled();
     expect(result.token).toBe("auth-jwt-token-jti");
@@ -176,7 +201,7 @@ describe("Journey Token Resolvers", () => {
     (Journey.findOne as jest.Mock).mockResolvedValue(null);
 
     await expect(
-      joinJourneyViaToken({}, { token: mockToken, name: "Guest" }, {})
+      joinJourneyViaToken({}, { token: mockToken, name: "Guest" }, {}),
     ).rejects.toThrow("Invalid or expired token");
   });
 });

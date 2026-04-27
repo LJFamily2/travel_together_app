@@ -17,6 +17,7 @@ import JourneySettingsModal from "../../components/JourneySettingsModal";
 import PendingRequestsModal from "../../components/PendingRequestsModal";
 import MembersModal from "../../components/MembersModal";
 import UserSettingsModal from "../../components/UserSettingsModal";
+import TailwindDateRangePicker from "../../components/TailwindDateRangePicker";
 import { updateJourneyMembers } from "../../../lib/apolloCache";
 import { CurrencyProvider } from "../../context/CurrencyContext";
 import Cookies from "js-cookie";
@@ -27,14 +28,36 @@ const GENERATE_JOIN_TOKEN = gql`
   }
 `;
 
+const UPDATE_JOURNEY = gql`
+  mutation UpdateJourney(
+    $journeyId: ID!
+    $name: String
+    $startDate: String
+    $endDate: String
+  ) {
+    updateJourney(
+      journeyId: $journeyId
+      name: $name
+      startDate: $startDate
+      endDate: $endDate
+    ) {
+      id
+      name
+      startDate
+      endDate
+    }
+  }
+`;
+
 const GET_DASHBOARD_DATA = gql`
-  query GetDashboardData($slug: String!) {
+  query GetDashboardData($slug: String!, $expenseOffset: Int, $expenseLimit: Int) {
     getJourneyDetails(slug: $slug) {
       id
       slug
       name
-      expireAt
+      startDate
       endDate
+      expireAt
       leader {
         id
         name
@@ -53,7 +76,7 @@ const GET_DASHBOARD_DATA = gql`
         name
         isGuest
       }
-      expenses {
+      expenses(offset: $expenseOffset, limit: $expenseLimit) {
         id
         description
         totalAmount
@@ -71,6 +94,14 @@ const GET_DASHBOARD_DATA = gql`
           reason
         }
         hasImage
+        createdAt
+      }
+      actionLogs {
+        id
+        action
+        actorName
+        details
+        metadata
         createdAt
       }
     }
@@ -102,13 +133,22 @@ interface Expense {
   createdAt: string;
 }
 
+export interface ActionLog {
+  id: string;
+  action: string;
+  actorName?: string;
+  details?: string;
+  createdAt: string;
+}
+
 interface DashboardData {
   getJourneyDetails: {
     id: string;
     slug: string;
     name: string;
-    expireAt: string | null;
+    startDate?: string | null;
     endDate?: string | null;
+    expireAt: string | null;
     leader: {
       id: string;
       name: string;
@@ -128,6 +168,7 @@ interface DashboardData {
       isGuest?: boolean;
     }[];
     expenses: Expense[];
+    actionLogs: ActionLog[];
   };
   me: {
     id: string;
@@ -202,18 +243,75 @@ export default function JourneyDashboard() {
   const [isLeaving, setIsLeaving] = useState(false);
   const [showQr, setShowQr] = useState(false);
   const [joinToken, setJoinToken] = useState("");
+  // Journey time edit
+  const [isEditingJourneyTime, setIsEditingJourneyTime] = useState(false);
+  const [editStartDate, setEditStartDate] = useState("");
+  const [editEndDate, setEditEndDate] = useState("");
+  const [isSavingJourneyTime, setIsSavingJourneyTime] = useState(false);
 
-  const { data, loading, error, refetch } = useQuery<DashboardData>(
+  const expenseLimit = 20;
+  const [hasMoreExpenses, setHasMoreExpenses] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+
+  const { data, loading, error, refetch, fetchMore } = useQuery<DashboardData>(
     GET_DASHBOARD_DATA,
     {
-      variables: { slug },
+      variables: { slug, expenseOffset: 0, expenseLimit },
       fetchPolicy: "network-only",
-    }
+      notifyOnNetworkStatusChange: true,
+    },
   );
 
+  useEffect(() => {
+    if (data?.getJourneyDetails?.expenses) {
+      if (data.getJourneyDetails.expenses.length < expenseLimit) {
+        setHasMoreExpenses(false);
+      } else {
+        setHasMoreExpenses(true);
+      }
+    }
+  }, [data, expenseLimit]);
+
+  const handleLoadMoreExpenses = async () => {
+    if (!hasMoreExpenses || loadingMore) return;
+    const currentLength = data?.getJourneyDetails?.expenses.length || 0;
+    setLoadingMore(true);
+    try {
+      await fetchMore({
+        variables: {
+          slug,
+          expenseOffset: currentLength,
+          expenseLimit,
+        },
+        updateQuery: (prev, { fetchMoreResult }) => {
+          if (!fetchMoreResult) return prev;
+          if (fetchMoreResult.getJourneyDetails.expenses.length < expenseLimit) {
+            setHasMoreExpenses(false);
+          }
+          return {
+            ...prev,
+            getJourneyDetails: {
+              ...prev.getJourneyDetails,
+              expenses: [
+                ...prev.getJourneyDetails.expenses,
+                ...fetchMoreResult.getJourneyDetails.expenses,
+              ],
+            },
+          };
+        },
+      });
+    } catch (e) {
+      console.error("Failed to fetch more expenses", e);
+    } finally {
+      setLoadingMore(false);
+    }
+  };
+
   const [generateToken] = useMutation<{ generateJoinToken: string }>(
-    GENERATE_JOIN_TOKEN
+    GENERATE_JOIN_TOKEN,
   );
+
+  const [updateJourneyMutation] = useMutation(UPDATE_JOURNEY);
 
   const [leaveJourney] = useMutation<
     LeaveJourneyResponse,
@@ -225,7 +323,7 @@ export default function JourneyDashboard() {
       const currentMembers = data?.getJourneyDetails?.members || [];
       const pending = data?.getJourneyDetails?.pendingMembers || [];
       const newMembers = currentMembers.filter(
-        (m: any) => m.id !== vars.memberId
+        (m: any) => m.id !== vars.memberId,
       );
       return {
         removeMember: {
@@ -243,7 +341,7 @@ export default function JourneyDashboard() {
           cache,
           updated.id,
           updated.members || [],
-          updated.pendingMembers || []
+          updated.pendingMembers || [],
         );
       } catch (e) {
         try {
@@ -323,7 +421,7 @@ export default function JourneyDashboard() {
 
   const isMember = journey.members.some((m) => m.id === currentUser.id);
   const isPending = journey.pendingMembers?.some(
-    (m) => m.id === currentUser.id
+    (m) => m.id === currentUser.id,
   );
 
   if (isPending) {
@@ -423,6 +521,41 @@ export default function JourneyDashboard() {
     }
   };
 
+  const handleSaveJourneyTime = async () => {
+    if (!journeyId || isSavingJourneyTime) return;
+    setIsSavingJourneyTime(true);
+    try {
+      await updateJourneyMutation({
+        variables: {
+          journeyId,
+          startDate: editStartDate || undefined,
+          endDate: editEndDate || undefined,
+        },
+      });
+      setIsEditingJourneyTime(false);
+      toast.success("Journey dates updated");
+      await refetch();
+    } catch (err) {
+      toast.error("Failed to update journey dates: " + (err as Error).message);
+    } finally {
+      setIsSavingJourneyTime(false);
+    }
+  };
+
+  const startEditJourneyTime = () => {
+    // Populate fields from current journey data
+    const fmt = (d?: string | null) => {
+      if (!d) return "";
+      const date = new Date(parseInt(d));
+      if (isNaN(date.getTime())) return "";
+      // Format as YYYY-MM-DD for date inputs
+      return date.toISOString().slice(0, 10);
+    };
+    setEditStartDate(fmt(journey?.startDate));
+    setEditEndDate(fmt(journey?.endDate));
+    setIsEditingJourneyTime(true);
+  };
+
   const handleRemoveMember = async (memberId: string) => {
     if (!journeyId) return;
     try {
@@ -436,7 +569,7 @@ export default function JourneyDashboard() {
             client.cache,
             journeyId,
             updated.members || [],
-            updated.pendingMembers || []
+            updated.pendingMembers || [],
           );
         } catch (cacheErr) {
           try {
@@ -481,7 +614,7 @@ export default function JourneyDashboard() {
               if (typeof m.isGuest !== "undefined") return m;
               // try to reuse value from existing cache if available
               const existingMatch = existing.getJourneyDetails.members.find(
-                (em) => em.id === m.id
+                (em) => em.id === m.id,
               );
               return {
                 ...m,
@@ -534,6 +667,77 @@ export default function JourneyDashboard() {
                 <h1 className="text-2xl md:text-4xl font-bold mb-2 text-gray-900">
                   {journey.name}
                 </h1>
+                {/* Journey date display + edit */}
+                <div className="flex items-center gap-2 flex-wrap mb-3">
+                  {!isEditingJourneyTime ? (
+                    <>
+                      {(journey.startDate || journey.endDate) && (
+                        <span className="text-sm text-gray-500">
+                          {journey.startDate
+                            ? new Date(
+                                parseInt(journey.startDate),
+                              ).toLocaleDateString()
+                            : "?"}
+                          {" — "}
+                          {journey.endDate
+                            ? new Date(
+                                parseInt(journey.endDate),
+                              ).toLocaleDateString()
+                            : "?"}
+                        </span>
+                      )}
+                      {isLeader && (
+                        <button
+                          onClick={startEditJourneyTime}
+                          className="text-gray-400 hover:text-blue-500 transition-colors cursor-pointer p-1 rounded-full hover:bg-blue-50"
+                          title="Edit journey dates"
+                          aria-label="Edit journey dates"
+                        >
+                          <svg
+                            className="w-4 h-4"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"
+                            />
+                          </svg>
+                        </button>
+                      )}
+                    </>
+                  ) : (
+                    <div className="flex flex-wrap items-end gap-3 py-1 my-1">
+                      <TailwindDateRangePicker
+                        startDate={editStartDate}
+                        endDate={editEndDate}
+                        onChange={(start, end) => {
+                          setEditStartDate(start);
+                          setEditEndDate(end);
+                        }}
+                        isRange={true}
+                      />
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={handleSaveJourneyTime}
+                          disabled={isSavingJourneyTime}
+                          className="px-5 h-[48px] bg-blue-600 text-white rounded-2xl text-sm font-semibold shadow-sm hover:bg-blue-700 transition-colors disabled:opacity-50 cursor-pointer flex items-center justify-center"
+                        >
+                          {isSavingJourneyTime ? "Saving..." : "Save"}
+                        </button>
+                        <button
+                          onClick={() => setIsEditingJourneyTime(false)}
+                          className="px-5 h-[48px] bg-gray-100 text-gray-700 rounded-2xl text-sm font-semibold hover:bg-gray-200 transition-colors cursor-pointer flex items-center justify-center"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
                 <div className="flex items-center gap-2 text-gray-500">
                   <span className="bg-gray-100 px-3 py-1 rounded-full text-sm">
                     Leader: {journey.leader.name}
@@ -545,7 +749,7 @@ export default function JourneyDashboard() {
                           ? (e) => {
                               e.preventDefault();
                               toast.error(
-                                "Journey is locked. Unlock to invite new members."
+                                "Journey is locked. Unlock to invite new members.",
                               );
                             }
                           : handleShowQr
@@ -750,6 +954,7 @@ export default function JourneyDashboard() {
                   currentUser={currentUser}
                   members={journey.members}
                   isLocked={isInputLocked}
+                  onExpenseAdded={() => refetch()}
                 />
               </div>
 
@@ -759,8 +964,14 @@ export default function JourneyDashboard() {
                   journeyId={journeyId}
                   journeyName={journey.name}
                   expenses={journey.expenses}
+                  actionLogs={journey.actionLogs}
                   currentUserId={currentUser.id}
                   members={journey.members}
+                  isLeader={isLeader}
+                  onRefetch={() => refetch()}
+                  onLoadMoreExpenses={handleLoadMoreExpenses}
+                  hasMoreExpenses={hasMoreExpenses}
+                  loadingMoreExpenses={loadingMore}
                 />
               </div>
             </div>
@@ -841,6 +1052,7 @@ export default function JourneyDashboard() {
                   aria-hidden
                   className="absolute inset-0 object-cover opacity-10 pointer-events-none"
                   fill
+                  sizes="250px"
                 />
                 <StyledQRCode
                   value={`${

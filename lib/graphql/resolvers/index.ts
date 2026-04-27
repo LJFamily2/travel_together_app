@@ -13,6 +13,7 @@ const mergedResolvers = {
     ...expenseResolvers.Mutation,
   },
   Journey: journeyResolvers.Journey,
+  ActionLog: journeyResolvers.ActionLog,
   Expense: expenseResolvers.Expense,
   Split: expenseResolvers.Split,
   User: userResolvers.User,

@@ -14,7 +14,7 @@ async function checkMembers() {
     journeys.forEach((j) => {
       console.debug(`Journey: ${j.name} (ID: ${j._id})`);
       console.debug(`Member Count: ${j.members.length}`);
-      j.members.forEach((m: any) => {
+      (j.members as unknown as Array<{ name: string; _id: string }>).forEach((m) => {
         console.debug(` - ${m.name} (${m._id})`);
       });
       console.debug("----------------");

@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
-import { useState, ChangeEvent } from "react";
+import { useState, useRef, ChangeEvent } from "react";
 import { useCurrency } from "../context/CurrencyContext";
 import { gql } from "@apollo/client";
 import { useApolloClient } from "@apollo/client/react";
@@ -58,6 +58,7 @@ interface AddExpenseFormProps {
   currentUser: Member;
   members: Member[];
   isLocked?: boolean;
+  onExpenseAdded?: () => void;
 }
 
 export default function AddExpenseForm({
@@ -65,6 +66,7 @@ export default function AddExpenseForm({
   currentUser,
   members,
   isLocked = false,
+  onExpenseAdded,
 }: AddExpenseFormProps) {
   const { formatCurrency } = useCurrency();
   const client = useApolloClient();
@@ -72,6 +74,9 @@ export default function AddExpenseForm({
   const [description, setDescription] = useState("");
   const [imageBase64, setImageBase64] = useState<string | null>(null);
   const [payerId, setPayerId] = useState(currentUser.id);
+  const [isPayerDropdownOpen, setIsPayerDropdownOpen] = useState(false);
+  const [payerSearchQuery, setPayerSearchQuery] = useState("");
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Split logic state
   const [splitType, setSplitType] = useState<"equal" | "separate">("equal");
@@ -298,6 +303,8 @@ export default function AddExpenseForm({
       setSplitType("equal");
       setPayerId(currentUser.id);
       toast.success("Expense added!");
+      // Notify parent to refetch (picks up new actionLogs etc.)
+      onExpenseAdded?.();
     } catch (err) {
       console.error("Error adding expense:", err);
       toast.error("Failed to add expense.");
@@ -361,17 +368,76 @@ export default function AddExpenseForm({
         <label className="block text-sm font-medium mb-1 text-gray-700">
           Paid By
         </label>
-        <select
-          value={payerId}
-          onChange={(e) => setPayerId(e.target.value)}
-          className="w-full p-3 border border-gray-200 rounded-xl bg-gray-50 focus:bg-white transition-colors"
-        >
-          {uniqueMembers.map((m) => (
-            <option key={m.id} value={m.id}>
-              {m.name} {m.id === currentUser.id ? "(You)" : ""}
-            </option>
-          ))}
-        </select>
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => {
+              setIsPayerDropdownOpen(!isPayerDropdownOpen);
+              setPayerSearchQuery("");
+            }}
+            className="w-full flex items-center justify-between p-3 border border-gray-200 rounded-xl bg-gray-50 hover:bg-white transition-colors cursor-pointer text-left"
+          >
+            <span className="truncate pr-2">
+              {uniqueMembers.find((m) => m.id === payerId)?.name} 
+              {payerId === currentUser.id ? " (You)" : ""}
+            </span>
+            <svg
+              className={`w-4 h-4 text-gray-500 transition-transform ${
+                isPayerDropdownOpen ? "rotate-180" : ""
+              }`}
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path>
+            </svg>
+          </button>
+          
+          {isPayerDropdownOpen && (
+            <>
+              <div 
+                className="fixed inset-0 z-40" 
+                onClick={() => setIsPayerDropdownOpen(false)}
+              ></div>
+              <div className="absolute z-50 w-full mt-2 bg-white border border-gray-200 rounded-xl shadow-2xl ring-1 ring-black/5 overflow-hidden flex flex-col">
+                <div className="p-2 border-b border-gray-100 bg-gray-50/50">
+                  <input
+                    type="text"
+                    placeholder="Search member..."
+                    value={payerSearchQuery}
+                    onChange={(e) => setPayerSearchQuery(e.target.value)}
+                    className="w-full p-2 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400 transition-all"
+                    autoFocus
+                  />
+                </div>
+                <div className="max-h-56 overflow-y-auto py-1 custom-scrollbar">
+                  {uniqueMembers
+                    .filter((m) => m.name.toLowerCase().includes(payerSearchQuery.toLowerCase()))
+                    .map((m) => (
+                      <button
+                        key={m.id}
+                        type="button"
+                        className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 cursor-pointer ${
+                          payerId === m.id ? "bg-blue-50 font-medium text-blue-700" : "text-gray-700"
+                        }`}
+                        onClick={() => {
+                          setPayerId(m.id);
+                          setIsPayerDropdownOpen(false);
+                          setPayerSearchQuery("");
+                        }}
+                      >
+                        {m.name} {m.id === currentUser.id ? "(You)" : ""}
+                      </button>
+                    ))}
+                  {uniqueMembers.filter((m) => m.name.toLowerCase().includes(payerSearchQuery.toLowerCase())).length === 0 && (
+                    <div className="px-4 py-3 text-sm text-gray-500 text-center">No members found</div>
+                  )}
+                </div>
+              </div>
+            </>
+          )}
+        </div>
       </div>
 
       <div className="mb-4">
@@ -553,19 +619,37 @@ export default function AddExpenseForm({
           Receipt Image
         </label>
         <input
+          ref={fileInputRef}
           type="file"
           accept="image/*"
           onChange={handleImageChange}
-          className="cursor-pointer w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-black file:text-white hover:file:opacity-80"
+          className="cursor-pointer w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-black file:text-white hover:file:opacity-80 cursor-pointer"
         />
         {imageBase64 && (
-          <Image
-            src={imageBase64}
-            alt="Preview"
-            width={200}
-            height={200}
-            className="mt-2 h-20 w-auto object-cover rounded-xl"
-          />
+          <div className="mt-2 relative inline-block">
+            <Image
+              src={imageBase64}
+              alt="Preview"
+              width={200}
+              height={200}
+              className="h-20 w-auto object-cover rounded-xl"
+            />
+            <button
+              type="button"
+              onClick={() => {
+                setImageBase64(null);
+                if (fileInputRef.current) {
+                  fileInputRef.current.value = "";
+                }
+              }}
+              className="absolute -top-2 -right-2 bg-white text-gray-700 hover:text-red-500 rounded-full p-1 shadow-md border border-gray-100 transition-colors cursor-pointer"
+              title="Remove image"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
         )}
       </div>
 

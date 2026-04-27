@@ -9,6 +9,9 @@ jest.mock("../lib/models/Journey");
 jest.mock("../lib/utils/expiration", () => ({
   refreshJourneyExpiration: jest.fn().mockResolvedValue(null),
 }));
+jest.mock("../lib/utils/actionLog", () => ({
+  logJourneyAction: jest.fn().mockResolvedValue(undefined),
+}));
 
 describe("Expense resolvers - addExpense", () => {
   const { addExpense } = expenseResolvers.Mutation;
@@ -56,7 +59,7 @@ describe("Expense resolvers - addExpense", () => {
     const result = await addExpense(
       {},
       { journeyId, payerId, totalAmount, description: "Deduction", splits },
-      {} as any
+      {} as any,
     );
 
     expect(mockSave).toHaveBeenCalled();
@@ -87,8 +90,8 @@ describe("Expense resolvers - addExpense", () => {
       addExpense(
         {},
         { journeyId, payerId, totalAmount, description: "Bad", splits },
-        {} as any
-      )
+        {} as any,
+      ),
     ).rejects.toThrow(/must equal the total amount/);
   });
 });
@@ -98,6 +101,12 @@ describe("Expense resolvers - updateExpense & deleteExpense", () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    (Journey.findById as jest.Mock).mockResolvedValue({
+      isInputLocked: false,
+      endDate: null,
+      leaderId: "leader-1",
+      expireAt: null,
+    });
   });
 
   it("allows the payer to edit a deduction split and updates total", async () => {
@@ -152,7 +161,7 @@ describe("Expense resolvers - updateExpense & deleteExpense", () => {
     const result = await updateExpense(
       {},
       { expenseId, splits: newSplits, totalAmount: 150000 },
-      { user: { userId: payerId } }
+      { user: { userId: payerId } },
     );
 
     expect(mockSave).toHaveBeenCalled();
@@ -178,9 +187,44 @@ describe("Expense resolvers - updateExpense & deleteExpense", () => {
       updateExpense(
         {},
         { expenseId, splits: [] as any, totalAmount: 0 },
-        { user: { userId: "other-user" } }
-      )
+        { user: { userId: "other-user" } },
+      ),
     ).rejects.toThrow(/Unauthorized/);
+  });
+
+  it("allows the journey leader to edit another member expense", async () => {
+    const expenseId = "exp-owner-edit";
+    const payerId = "507f1f77bcf86cd799439011";
+
+    const existingExpense: any = {
+      _id: expenseId,
+      payerId,
+      journeyId: "journey-1",
+      totalAmount: 100,
+      description: "Lunch",
+      splits: [
+        {
+          userId: "507f1f77bcf86cd799439012",
+          baseAmount: 100,
+          deduction: 0,
+        },
+      ],
+      save: jest.fn().mockResolvedValue(true),
+      populate: jest
+        .fn()
+        .mockResolvedValue({ id: expenseId, totalAmount: 120 }),
+    };
+
+    (Expense.findById as jest.Mock).mockResolvedValue(existingExpense);
+
+    const result = await updateExpense(
+      {},
+      { expenseId, totalAmount: 120 },
+      { user: { userId: "leader-1" } },
+    );
+
+    expect(existingExpense.save).toHaveBeenCalled();
+    expect(result).toEqual({ id: expenseId, totalAmount: 120 });
   });
 
   it("allows the payer to delete a deduction expense", async () => {
@@ -203,7 +247,7 @@ describe("Expense resolvers - updateExpense & deleteExpense", () => {
     const result = await deleteExpense(
       {},
       { expenseId },
-      { user: { userId: payerId } }
+      { user: { userId: payerId } },
     );
 
     expect(result).toBe(true);
@@ -224,7 +268,34 @@ describe("Expense resolvers - updateExpense & deleteExpense", () => {
     (Expense.findById as jest.Mock).mockResolvedValue(existingExpense);
 
     await expect(
-      deleteExpense({}, { expenseId }, { user: { userId: "other-user" } })
+      deleteExpense({}, { expenseId }, { user: { userId: "other-user" } }),
     ).rejects.toThrow(/Unauthorized/);
+  });
+
+  it("allows the journey leader to delete another member expense", async () => {
+    const expenseId = "exp-owner-delete";
+    const payerId = "507f1f77bcf86cd799439011";
+
+    const existingExpense: any = {
+      _id: expenseId,
+      payerId,
+      journeyId: "journey-1",
+      totalAmount: 90,
+      description: "Taxi",
+      splits: [],
+    };
+
+    (Expense.findById as jest.Mock).mockResolvedValue(existingExpense);
+    (Expense.findByIdAndDelete as jest.Mock) = jest
+      .fn()
+      .mockResolvedValue(true);
+
+    const result = await deleteExpense(
+      {},
+      { expenseId },
+      { user: { userId: "leader-1" } },
+    );
+
+    expect(result).toBe(true);
   });
 });

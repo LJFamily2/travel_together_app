@@ -93,6 +93,8 @@ export default function SettleUpModal({
 }: SettleUpModalProps) {
   const { formatCurrency } = useCurrency();
   const [recipientId, setRecipientId] = useState("");
+  const [isRecipientDropdownOpen, setIsRecipientDropdownOpen] = useState(false);
+  const [recipientSearchQuery, setRecipientSearchQuery] = useState("");
   const [deduction, setDeduction] = useState("");
   const [reason, setReason] = useState("");
   const client = useApolloClient();
@@ -607,29 +609,107 @@ export default function SettleUpModal({
           <label className="block text-sm font-medium mb-1 text-gray-700">
             Member (who owes you)
           </label>
-          <select
-            value={recipientId}
-            onChange={(e) => setRecipientId(e.target.value)}
-            className="w-full p-2 border border-gray-200 rounded-lg bg-white cursor-pointer"
-          >
-            <option className="cursor-pointer" value="">
-              Select a member
-            </option>
-            {members
-              .filter((m) => m.id !== currentUser.id)
-              // Filter: Only show members who owe ME money
-              .filter((m) => (balances[m.id] || 0) > 0)
-              // Filter out duplicates by name just in case
-              .filter(
-                (m, index, self) =>
-                  index === self.findIndex((t) => t.name === m.name)
-              )
-              .map((m) => (
-                <option key={m.id} value={m.id} className="cursor-pointer">
-                  {m.name} (Owes: ${formatCurrency(balances[m.id] || 0)})
-                </option>
-              ))}
-          </select>
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => {
+                setIsRecipientDropdownOpen(!isRecipientDropdownOpen);
+                setRecipientSearchQuery("");
+              }}
+              className="w-full flex items-center justify-between p-3 border border-gray-200 rounded-xl bg-white hover:bg-gray-50 transition-colors cursor-pointer text-left"
+            >
+              <span className="truncate pr-2">
+                {recipientId === "" ? (
+                  <span className="text-gray-500">Select a member</span>
+                ) : (
+                  (() => {
+                    const selectedMember = members.find((m) => m.id === recipientId);
+                    return selectedMember 
+                      ? `${selectedMember.name} (Owes: $${formatCurrency(balances[selectedMember.id] || 0)})` 
+                      : "Select a member";
+                  })()
+                )}
+              </span>
+              <svg
+                className={`w-4 h-4 text-gray-500 transition-transform ${
+                  isRecipientDropdownOpen ? "rotate-180" : ""
+                }`}
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path>
+              </svg>
+            </button>
+            
+            {isRecipientDropdownOpen && (
+              <>
+                <div 
+                  className="fixed inset-0 z-40" 
+                  onClick={() => setIsRecipientDropdownOpen(false)}
+                ></div>
+                <div className="absolute z-50 w-full mt-2 bg-white border border-gray-200 rounded-xl shadow-2xl ring-1 ring-black/5 overflow-hidden flex flex-col">
+                  <div className="p-2 border-b border-gray-100 bg-gray-50/50">
+                    <input
+                      type="text"
+                      placeholder="Search member..."
+                      value={recipientSearchQuery}
+                      onChange={(e) => setRecipientSearchQuery(e.target.value)}
+                      className="w-full p-2 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400 transition-all"
+                      autoFocus
+                    />
+                  </div>
+                  <div className="max-h-56 overflow-y-auto py-1 custom-scrollbar">
+                    <button
+                      type="button"
+                      className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 cursor-pointer ${
+                        recipientId === "" ? "bg-blue-50 font-medium text-blue-700" : "text-gray-700"
+                      }`}
+                      onClick={() => {
+                        setRecipientId("");
+                        setIsRecipientDropdownOpen(false);
+                        setRecipientSearchQuery("");
+                      }}
+                    >
+                      Select a member
+                    </button>
+                    {members
+                      .filter((m) => m.id !== currentUser.id)
+                      .filter((m) => (balances[m.id] || 0) > 0)
+                      .filter(
+                        (m, index, self) =>
+                          index === self.findIndex((t) => t.name === m.name)
+                      )
+                      .filter((m) => m.name.toLowerCase().includes(recipientSearchQuery.toLowerCase()))
+                      .map((m) => (
+                        <button
+                          key={m.id}
+                          type="button"
+                          className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 cursor-pointer ${
+                            recipientId === m.id ? "bg-blue-50 font-medium text-blue-700" : "text-gray-700"
+                          }`}
+                          onClick={() => {
+                            setRecipientId(m.id);
+                            setIsRecipientDropdownOpen(false);
+                            setRecipientSearchQuery("");
+                          }}
+                        >
+                          {m.name} (Owes: ${formatCurrency(balances[m.id] || 0)})
+                        </button>
+                      ))}
+                    {members
+                      .filter((m) => m.id !== currentUser.id)
+                      .filter((m) => (balances[m.id] || 0) > 0)
+                      .filter((m) => m.name.toLowerCase().includes(recipientSearchQuery.toLowerCase()))
+                      .length === 0 && (
+                      <div className="px-4 py-3 text-sm text-gray-500 text-center">No members found</div>
+                    )}
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
         </div>
 
         <div className="mb-4">
