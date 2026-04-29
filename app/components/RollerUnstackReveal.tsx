@@ -32,10 +32,10 @@ export const RollerUnstackReveal = ({
         scale: 1,
         filter: "grayscale(0%) brightness(100%)",
       }}
-      viewport={{ 
-        root: scrollContainerRef, 
-        once: true, 
-        margin: "0px 0px 50px 0px" 
+      viewport={{
+        root: scrollContainerRef,
+        once: true,
+        margin: "0px 0px 50px 0px",
       }}
       transition={{
         type: "spring",

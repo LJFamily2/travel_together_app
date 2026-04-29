@@ -703,186 +703,207 @@ export default function ActivityFeed({
           </div>
           {/* Scrollable container — required for position:sticky to work */}
           <div className="max-h-[calc(100vh-100px)] min-h-[800px] overflow-y-auto pr-1 custom-scrollbar">
-          {(() => {
-            // Only show user-facing create/update/delete logs
-            const VISIBLE_ACTIONS = new Set([
-              "EXPENSE_CREATED",
-              "EXPENSE_UPDATED",
-              "EXPENSE_DELETED",
-              "JOURNEY_UPDATED",
-              "JOURNEY_LOCK_TOGGLED",
-              "JOURNEY_INPUT_LOCK_TOGGLED",
-              "APPROVAL_REQUIREMENT_TOGGLED",
-              "JOURNEY_PASSWORD_UPDATED",
-            ]);
+            {(() => {
+              // Only show user-facing create/update/delete logs
+              const VISIBLE_ACTIONS = new Set([
+                "EXPENSE_CREATED",
+                "EXPENSE_UPDATED",
+                "EXPENSE_DELETED",
+                "JOURNEY_UPDATED",
+                "JOURNEY_LOCK_TOGGLED",
+                "JOURNEY_INPUT_LOCK_TOGGLED",
+                "APPROVAL_REQUIREMENT_TOGGLED",
+                "JOURNEY_PASSWORD_UPDATED",
+              ]);
 
-            // Filter and sort newest → oldest
-            const visibleLogs = (actionLogs ?? [])
-              .filter((log) => {
-                if (!VISIBLE_ACTIONS.has(log.action)) return false;
-                if (dateFilter) {
-                  const d = new Date(parseInt(log.createdAt));
-                  const logDateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-                  if (logDateStr !== dateFilter) return false;
-                }
-                return true;
-              })
-              .slice()
-              .sort((a, b) => parseInt(b.createdAt) - parseInt(a.createdAt));
+              // Filter and sort newest → oldest
+              const visibleLogs = (actionLogs ?? [])
+                .filter((log) => {
+                  if (!VISIBLE_ACTIONS.has(log.action)) return false;
+                  if (dateFilter) {
+                    const d = new Date(parseInt(log.createdAt));
+                    const logDateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+                    if (logDateStr !== dateFilter) return false;
+                  }
+                  return true;
+                })
+                .slice()
+                .sort((a, b) => parseInt(b.createdAt) - parseInt(a.createdAt));
 
-            if (visibleLogs.length === 0) {
-              return (
-                <p className="text-gray-500 text-center py-8">
-                  No activity logs found.
-                </p>
-              );
-            }
-
-            // Group by date
-            const groups: { dateKey: string; logs: typeof visibleLogs }[] = [];
-            visibleLogs.forEach((log) => {
-              const key = toDateKey(log.createdAt);
-              const last = groups[groups.length - 1];
-              if (last && last.dateKey === key) {
-                last.logs.push(log);
-              } else {
-                groups.push({ dateKey: key, logs: [log] });
-              }
-            });
-
-            return groups.map(({ dateKey, logs: groupLogs }) => (
-              <div key={dateKey}>
-                {/* Sticky date header — works because parent has overflow-y:auto */}
-                <div className="sticky top-0 z-10 py-2 mb-3 bg-white/90 backdrop-blur-sm">
-                  <span className="inline-block bg-gray-100 text-gray-600 text-xs font-semibold px-3 py-1 rounded-full shadow-sm">
-                    {dateKey}
-                  </span>
-                </div>
-                <div className="space-y-3">
-                {groupLogs.map((log) => {
-              const name = log.actorName || "Someone";
-              // Extract expense description from details if present (format: "Expense: <desc>")
-              const expenseDesc = log.details?.startsWith("Expense:")
-                ? log.details.replace("Expense:", "").trim()
-                : null;
-
-              let metaObj: any = null;
-              try {
-                if (log.metadata) {
-                  metaObj = JSON.parse(log.metadata);
-                }
-              } catch (e) {}
-
-              let sentence: string;
-              switch (log.action) {
-                case "EXPENSE_CREATED":
-                  sentence = expenseDesc
-                    ? `${name} created expense "${expenseDesc}"`
-                    : `${name} added a new expense`;
-                  break;
-                case "EXPENSE_UPDATED":
-                  sentence = expenseDesc
-                    ? `${name} updated expense "${expenseDesc}"`
-                    : `${name} updated an expense`;
-                  break;
-                case "EXPENSE_DELETED":
-                  sentence = expenseDesc
-                    ? `${name} deleted expense "${expenseDesc}"`
-                    : `${name} deleted an expense`;
-                  break;
-                case "JOURNEY_UPDATED":
-                  sentence = `${name} updated the journey settings`;
-                  break;
-                case "JOURNEY_LOCK_TOGGLED":
-                  sentence =
-                    log.details === "Journey locked"
-                      ? `${name} locked the journey`
-                      : `${name} unlocked the journey`;
-                  break;
-                case "JOURNEY_INPUT_LOCK_TOGGLED":
-                  sentence =
-                    log.details === "Journey input locked"
-                      ? `${name} locked expense input`
-                      : `${name} unlocked expense input`;
-                  break;
-                case "APPROVAL_REQUIREMENT_TOGGLED":
-                  sentence =
-                    log.details === "Join approval enabled"
-                      ? `${name} enabled join approval`
-                      : `${name} disabled join approval`;
-                  break;
-                case "JOURNEY_PASSWORD_UPDATED":
-                  sentence =
-                    log.details === "Journey password set"
-                      ? `${name} set a journey password`
-                      : `${name} removed the journey password`;
-                  break;
-                default:
-                  sentence = `${name} performed an action`;
+              if (visibleLogs.length === 0) {
+                return (
+                  <p className="text-gray-500 text-center py-8">
+                    No activity logs found.
+                  </p>
+                );
               }
 
-              const changes: string[] = [];
-              if (metaObj && metaObj.before && metaObj.after) {
-                const b = metaObj.before;
-                const a = metaObj.after;
+              // Group by date
+              const groups: { dateKey: string; logs: typeof visibleLogs }[] =
+                [];
+              visibleLogs.forEach((log) => {
+                const key = toDateKey(log.createdAt);
+                const last = groups[groups.length - 1];
+                if (last && last.dateKey === key) {
+                  last.logs.push(log);
+                } else {
+                  groups.push({ dateKey: key, logs: [log] });
+                }
+              });
 
-                if (b.description && a.description && b.description !== a.description) {
-                  changes.push(`Description: "${b.description}" ➔ "${a.description}"`);
-                }
-                if (b.totalAmount !== undefined && a.totalAmount !== undefined && b.totalAmount !== a.totalAmount) {
-                  changes.push(`Amount: $${formatCurrency(b.totalAmount)} ➔ $${formatCurrency(a.totalAmount)}`);
-                }
-                if (b.payerId && a.payerId && b.payerId !== a.payerId) {
-                  const getMemberName = (id: string) =>
-                    members?.find((m) => m.id === id)?.name || "Unknown";
-                  changes.push(`Payer: ${getMemberName(b.payerId)} ➔ ${getMemberName(a.payerId)}`);
-                }
-              }
-
-              return (
-                <div
-                  key={log.id}
-                  className="p-4 border border-gray-100 rounded-2xl shadow-sm bg-white flex items-start gap-4"
-                >
-                  <div className="bg-blue-50 text-blue-500 p-2 rounded-full mt-1 shrink-0">
-                    <svg
-                      className="w-5 h-5"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                      />
-                    </svg>
+              return groups.map(({ dateKey, logs: groupLogs }) => (
+                <div key={dateKey}>
+                  {/* Sticky date header — works because parent has overflow-y:auto */}
+                  <div className="sticky top-0 z-10 py-2 mb-3 bg-white/90 backdrop-blur-sm">
+                    <span className="inline-block bg-gray-100 text-gray-600 text-xs font-semibold px-3 py-1 rounded-full shadow-sm">
+                      {dateKey}
+                    </span>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-gray-900 font-medium leading-snug">
-                      {sentence}
-                    </p>
-                    {changes.length > 0 && (
-                      <div className="mt-2 p-2 bg-gray-50 rounded-xl border border-gray-100 space-y-1">
-                        {changes.map((change, idx) => (
-                          <p key={idx} className="text-xs text-gray-600 font-medium">
-                            {change}
-                          </p>
-                        ))}
-                      </div>
-                    )}
-                    <div className="mt-1.5 text-xs text-gray-400">
-                      {new Date(parseInt(log.createdAt)).toLocaleString()}
-                    </div>
+                  <div className="space-y-3">
+                    {groupLogs.map((log) => {
+                      const name = log.actorName || "Someone";
+                      // Extract expense description from details if present (format: "Expense: <desc>")
+                      const expenseDesc = log.details?.startsWith("Expense:")
+                        ? log.details.replace("Expense:", "").trim()
+                        : null;
+
+                      let metaObj: any = null;
+                      try {
+                        if (log.metadata) {
+                          metaObj = JSON.parse(log.metadata);
+                        }
+                      } catch (e) {}
+
+                      let sentence: string;
+                      switch (log.action) {
+                        case "EXPENSE_CREATED":
+                          sentence = expenseDesc
+                            ? `${name} created expense "${expenseDesc}"`
+                            : `${name} added a new expense`;
+                          break;
+                        case "EXPENSE_UPDATED":
+                          sentence = expenseDesc
+                            ? `${name} updated expense "${expenseDesc}"`
+                            : `${name} updated an expense`;
+                          break;
+                        case "EXPENSE_DELETED":
+                          sentence = expenseDesc
+                            ? `${name} deleted expense "${expenseDesc}"`
+                            : `${name} deleted an expense`;
+                          break;
+                        case "JOURNEY_UPDATED":
+                          sentence = `${name} updated the journey settings`;
+                          break;
+                        case "JOURNEY_LOCK_TOGGLED":
+                          sentence =
+                            log.details === "Journey locked"
+                              ? `${name} locked the journey`
+                              : `${name} unlocked the journey`;
+                          break;
+                        case "JOURNEY_INPUT_LOCK_TOGGLED":
+                          sentence =
+                            log.details === "Journey input locked"
+                              ? `${name} locked expense input`
+                              : `${name} unlocked expense input`;
+                          break;
+                        case "APPROVAL_REQUIREMENT_TOGGLED":
+                          sentence =
+                            log.details === "Join approval enabled"
+                              ? `${name} enabled join approval`
+                              : `${name} disabled join approval`;
+                          break;
+                        case "JOURNEY_PASSWORD_UPDATED":
+                          sentence =
+                            log.details === "Journey password set"
+                              ? `${name} set a journey password`
+                              : `${name} removed the journey password`;
+                          break;
+                        default:
+                          sentence = `${name} performed an action`;
+                      }
+
+                      const changes: string[] = [];
+                      if (metaObj && metaObj.before && metaObj.after) {
+                        const b = metaObj.before;
+                        const a = metaObj.after;
+
+                        if (
+                          b.description &&
+                          a.description &&
+                          b.description !== a.description
+                        ) {
+                          changes.push(
+                            `Description: "${b.description}" ➔ "${a.description}"`,
+                          );
+                        }
+                        if (
+                          b.totalAmount !== undefined &&
+                          a.totalAmount !== undefined &&
+                          b.totalAmount !== a.totalAmount
+                        ) {
+                          changes.push(
+                            `Amount: $${formatCurrency(b.totalAmount)} ➔ $${formatCurrency(a.totalAmount)}`,
+                          );
+                        }
+                        if (b.payerId && a.payerId && b.payerId !== a.payerId) {
+                          const getMemberName = (id: string) =>
+                            members?.find((m) => m.id === id)?.name ||
+                            "Unknown";
+                          changes.push(
+                            `Payer: ${getMemberName(b.payerId)} ➔ ${getMemberName(a.payerId)}`,
+                          );
+                        }
+                      }
+
+                      return (
+                        <div
+                          key={log.id}
+                          className="p-4 border border-gray-100 rounded-2xl shadow-sm bg-white flex items-start gap-4"
+                        >
+                          <div className="bg-blue-50 text-blue-500 p-2 rounded-full mt-1 shrink-0">
+                            <svg
+                              className="w-5 h-5"
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                              />
+                            </svg>
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-gray-900 font-medium leading-snug">
+                              {sentence}
+                            </p>
+                            {changes.length > 0 && (
+                              <div className="mt-2 p-2 bg-gray-50 rounded-xl border border-gray-100 space-y-1">
+                                {changes.map((change, idx) => (
+                                  <p
+                                    key={idx}
+                                    className="text-xs text-gray-600 font-medium"
+                                  >
+                                    {change}
+                                  </p>
+                                ))}
+                              </div>
+                            )}
+                            <div className="mt-1.5 text-xs text-gray-400">
+                              {new Date(
+                                parseInt(log.createdAt),
+                              ).toLocaleString()}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
-              );
-            })}
-                </div>
-              </div>
-            ));
-          })()}
+              ));
+            })()}
           </div>
         </>
       ) : (
@@ -911,106 +932,107 @@ export default function ActivityFeed({
                 <button
                   type="button"
                   onClick={() => {
-                  setIsFilterDropdownOpen(!isFilterDropdownOpen);
-                  setFilterSearchQuery("");
-                }}
-                className="w-full flex items-center justify-between p-3 border border-gray-200 rounded-xl bg-white text-sm cursor-pointer hover:bg-gray-50 transition-colors"
-              >
-                <span className="truncate pr-2">
-                  {payerFilter === ""
-                    ? "All payers"
-                    : uniquePayers.find((p) => (p.id || p.name) === payerFilter)
-                        ?.name || payerFilter}
-                </span>
-                <svg
-                  className={`w-4 h-4 text-gray-500 transition-transform ${
-                    isFilterDropdownOpen ? "rotate-180" : ""
-                  }`}
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                  xmlns="http://www.w3.org/2000/svg"
+                    setIsFilterDropdownOpen(!isFilterDropdownOpen);
+                    setFilterSearchQuery("");
+                  }}
+                  className="w-full flex items-center justify-between p-3 border border-gray-200 rounded-xl bg-white text-sm cursor-pointer hover:bg-gray-50 transition-colors"
                 >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth="2"
-                    d="M19 9l-7 7-7-7"
-                  ></path>
-                </svg>
-              </button>
+                  <span className="truncate pr-2">
+                    {payerFilter === ""
+                      ? "All payers"
+                      : uniquePayers.find(
+                          (p) => (p.id || p.name) === payerFilter,
+                        )?.name || payerFilter}
+                  </span>
+                  <svg
+                    className={`w-4 h-4 text-gray-500 transition-transform ${
+                      isFilterDropdownOpen ? "rotate-180" : ""
+                    }`}
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                    xmlns="http://www.w3.org/2000/svg"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="2"
+                      d="M19 9l-7 7-7-7"
+                    ></path>
+                  </svg>
+                </button>
 
-              {isFilterDropdownOpen && (
-                <>
-                  <div
-                    className="fixed inset-0 z-40"
-                    onClick={() => setIsFilterDropdownOpen(false)}
-                  ></div>
-                  <div className="absolute z-50 w-full mt-2 bg-white border border-gray-200 rounded-xl shadow-2xl ring-1 ring-black/5 overflow-hidden flex flex-col">
-                    <div className="p-2 border-b border-gray-100 bg-gray-50/50">
-                      <input
-                        type="text"
-                        placeholder="Search payer..."
-                        value={filterSearchQuery}
-                        onChange={(e) => setFilterSearchQuery(e.target.value)}
-                        className="w-full p-2 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400 transition-all"
-                        autoFocus
-                      />
-                    </div>
-                    <div className="max-h-56 overflow-y-auto py-1 custom-scrollbar">
-                      <button
-                        type="button"
-                        className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 cursor-pointer ${
-                          payerFilter === ""
-                            ? "bg-blue-50 font-medium text-blue-700"
-                            : "text-gray-700"
-                        }`}
-                        onClick={() => {
-                          setPayerFilter("");
-                          setIsFilterDropdownOpen(false);
-                          setFilterSearchQuery("");
-                        }}
-                      >
-                        All payers
-                      </button>
-                      {uniquePayers
-                        .filter((p) =>
+                {isFilterDropdownOpen && (
+                  <>
+                    <div
+                      className="fixed inset-0 z-40"
+                      onClick={() => setIsFilterDropdownOpen(false)}
+                    ></div>
+                    <div className="absolute z-50 w-full mt-2 bg-white border border-gray-200 rounded-xl shadow-2xl ring-1 ring-black/5 overflow-hidden flex flex-col">
+                      <div className="p-2 border-b border-gray-100 bg-gray-50/50">
+                        <input
+                          type="text"
+                          placeholder="Search payer..."
+                          value={filterSearchQuery}
+                          onChange={(e) => setFilterSearchQuery(e.target.value)}
+                          className="w-full p-2 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400 transition-all"
+                          autoFocus
+                        />
+                      </div>
+                      <div className="max-h-56 overflow-y-auto py-1 custom-scrollbar">
+                        <button
+                          type="button"
+                          className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 cursor-pointer ${
+                            payerFilter === ""
+                              ? "bg-blue-50 font-medium text-blue-700"
+                              : "text-gray-700"
+                          }`}
+                          onClick={() => {
+                            setPayerFilter("");
+                            setIsFilterDropdownOpen(false);
+                            setFilterSearchQuery("");
+                          }}
+                        >
+                          All payers
+                        </button>
+                        {uniquePayers
+                          .filter((p) =>
+                            (p.name || "")
+                              .toLowerCase()
+                              .includes(filterSearchQuery.toLowerCase()),
+                          )
+                          .map((p) => (
+                            <button
+                              key={p.id || p.name}
+                              type="button"
+                              className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 cursor-pointer ${
+                                payerFilter === (p.id || p.name)
+                                  ? "bg-blue-50 font-medium text-blue-700"
+                                  : "text-gray-700"
+                              }`}
+                              onClick={() => {
+                                setPayerFilter(p.id || p.name);
+                                setIsFilterDropdownOpen(false);
+                                setFilterSearchQuery("");
+                              }}
+                            >
+                              {p.name}
+                            </button>
+                          ))}
+                        {uniquePayers.filter((p) =>
                           (p.name || "")
                             .toLowerCase()
                             .includes(filterSearchQuery.toLowerCase()),
-                        )
-                        .map((p) => (
-                          <button
-                            key={p.id || p.name}
-                            type="button"
-                            className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 cursor-pointer ${
-                              payerFilter === (p.id || p.name)
-                                ? "bg-blue-50 font-medium text-blue-700"
-                                : "text-gray-700"
-                            }`}
-                            onClick={() => {
-                              setPayerFilter(p.id || p.name);
-                              setIsFilterDropdownOpen(false);
-                              setFilterSearchQuery("");
-                            }}
-                          >
-                            {p.name}
-                          </button>
-                        ))}
-                      {uniquePayers.filter((p) =>
-                        (p.name || "")
-                          .toLowerCase()
-                          .includes(filterSearchQuery.toLowerCase()),
-                      ).length === 0 && (
-                        <div className="px-4 py-3 text-sm text-gray-500 text-center">
-                          No payers found
-                        </div>
-                      )}
+                        ).length === 0 && (
+                          <div className="px-4 py-3 text-sm text-gray-500 text-center">
+                            No payers found
+                          </div>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                </>
-              )}
-            </div>
+                  </>
+                )}
+              </div>
             </div>
           </div>
           {/* Scrollable container — required for position:sticky to work */}
@@ -1021,7 +1043,8 @@ export default function ActivityFeed({
             onScroll={(e) => {
               const target = e.currentTarget;
               if (
-                target.scrollHeight - target.scrollTop <= target.clientHeight + 100 &&
+                target.scrollHeight - target.scrollTop <=
+                  target.clientHeight + 100 &&
                 !loadingMoreExpenses &&
                 hasMoreExpenses &&
                 onLoadMoreExpenses
@@ -1030,57 +1053,62 @@ export default function ActivityFeed({
               }
             }}
           >
-          {(() => {
-            const sorted = visibleExpenses
-              .slice()
-              .sort((a, b) => parseInt(b.createdAt) - parseInt(a.createdAt));
+            {(() => {
+              const sorted = visibleExpenses
+                .slice()
+                .sort((a, b) => parseInt(b.createdAt) - parseInt(a.createdAt));
 
-            const groups: { dateKey: string; items: typeof sorted }[] = [];
-            sorted.forEach((exp) => {
-              const key = toDateKey(exp.createdAt);
-              const last = groups[groups.length - 1];
-              if (last && last.dateKey === key) {
-                last.items.push(exp);
-              } else {
-                groups.push({ dateKey: key, items: [exp] });
+              const groups: { dateKey: string; items: typeof sorted }[] = [];
+              sorted.forEach((exp) => {
+                const key = toDateKey(exp.createdAt);
+                const last = groups[groups.length - 1];
+                if (last && last.dateKey === key) {
+                  last.items.push(exp);
+                } else {
+                  groups.push({ dateKey: key, items: [exp] });
+                }
+              });
+
+              if (sorted.length === 0) {
+                return <p className="text-gray-500">No expenses yet.</p>;
               }
-            });
 
-            if (sorted.length === 0) {
-              return <p className="text-gray-500">No expenses yet.</p>;
-            }
-
-
-            return groups.map(({ dateKey, items }) => (
-              <div key={dateKey}>
-                {/* Sticky date header — works because parent has overflow-y:auto */}
-                <div className="sticky top-0 z-10 pt-2 pb-3 mb-3 bg-white">
-                  <span className="inline-block bg-gray-100 text-gray-500 text-xs font-semibold px-3 py-1 rounded-full shadow-sm">
-                    {dateKey}
-                  </span>
+              return groups.map(({ dateKey, items }) => (
+                <div key={dateKey}>
+                  {/* Sticky date header — works because parent has overflow-y:auto */}
+                  <div className="sticky top-0 z-10 pt-2 pb-3 mb-3 bg-white">
+                    <span className="inline-block bg-gray-100 text-gray-500 text-xs font-semibold px-3 py-1 rounded-full shadow-sm">
+                      {dateKey}
+                    </span>
+                  </div>
+                  <div className="space-y-4">
+                    {items.map((expense, index) => {
+                      return (
+                        <RollerUnstackReveal
+                          key={expense.id}
+                          index={index}
+                          scrollContainerRef={
+                            scrollContainerRef as React.RefObject<HTMLElement | null>
+                          }
+                        >
+                          <ExpenseCard
+                            expense={expense}
+                            currentUserId={currentUserId}
+                            isLeader={isLeader}
+                            formatCurrency={formatCurrency}
+                            setPreviewImage={setPreviewImage}
+                            startEdit={startEdit}
+                            handleDelete={handleDelete}
+                            deleting={deleting}
+                            containerRef={scrollContainerRef}
+                          />
+                        </RollerUnstackReveal>
+                      );
+                    })}
+                  </div>
                 </div>
-                <div className="space-y-4">
-                {items.map((expense, index) => {
-              return (
-                <RollerUnstackReveal key={expense.id} index={index} scrollContainerRef={scrollContainerRef as React.RefObject<HTMLElement | null>}>
-                  <ExpenseCard
-                    expense={expense}
-                    currentUserId={currentUserId}
-                    isLeader={isLeader}
-                    formatCurrency={formatCurrency}
-                    setPreviewImage={setPreviewImage}
-                    startEdit={startEdit}
-                    handleDelete={handleDelete}
-                    deleting={deleting}
-                    containerRef={scrollContainerRef}
-                  />
-                </RollerUnstackReveal>
-              );
-            })}
-                </div>
-              </div>
-            ));
-          })()}
+              ));
+            })()}
             {loadingMoreExpenses && (
               <div className="py-4 flex justify-center">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
@@ -1305,7 +1333,9 @@ export default function ActivityFeed({
                               type="button"
                               onClick={() => {
                                 setIsAllSelected(false);
-                                setSelectedMemberIds(uniqueMembers.map((m) => m.id));
+                                setSelectedMemberIds(
+                                  uniqueMembers.map((m) => m.id),
+                                );
                               }}
                               className="flex items-center gap-2 bg-black text-white px-4 py-2 rounded-full text-sm font-medium hover:opacity-80 transition-opacity cursor-pointer"
                             >
@@ -1335,7 +1365,9 @@ export default function ActivityFeed({
                                   type="text"
                                   placeholder="Search members..."
                                   value={memberSearchQuery}
-                                  onChange={(e) => setMemberSearchQuery(e.target.value)}
+                                  onChange={(e) =>
+                                    setMemberSearchQuery(e.target.value)
+                                  }
                                   className="w-full p-2 text-sm border border-gray-200 rounded-xl bg-gray-50 mb-2 focus:outline-none focus:border-blue-400"
                                 />
                               )}
@@ -1344,16 +1376,19 @@ export default function ActivityFeed({
                                 {uniqueMembers
                                   .filter((m) =>
                                     normalizeString(m.name || "").includes(
-                                      normalizeString(memberSearchQuery || "")
-                                    )
+                                      normalizeString(memberSearchQuery || ""),
+                                    ),
                                   )
                                   .map((member) => {
-                                    const isSelected = selectedMemberIds.includes(member.id);
+                                    const isSelected =
+                                      selectedMemberIds.includes(member.id);
                                     return (
                                       <button
                                         key={member.id}
                                         type="button"
-                                        onClick={() => toggleMemberSelection(member.id)}
+                                        onClick={() =>
+                                          toggleMemberSelection(member.id)
+                                        }
                                         className={`
                                           flex items-center justify-center px-3 py-1 rounded-full text-sm border transition-all cursor-pointer
                                           ${
@@ -1592,16 +1627,17 @@ function ExpenseCard({
       initial={{ clipPath: "inset(0% 50% 0% 50%)", opacity: 0 }}
       whileInView={{ clipPath: "inset(0% 0% 0% 0%)", opacity: 1 }}
       viewport={{ once: true, margin: "-20px" }}
-      transition={{ 
-        duration: 0.5, 
-        ease: "easeOut"
+      transition={{
+        duration: 0.5,
+        ease: "easeOut",
       }}
     >
       <div className="flex justify-between items-start">
         <div>
           <p className="font-semibold text-lg">{expense.description}</p>
           <p className="text-sm text-gray-500">
-            Paid by {expense.payer.name} • ${formatCurrency(expense.totalAmount)}
+            Paid by {expense.payer.name} • $
+            {formatCurrency(expense.totalAmount)}
           </p>
           <p className="text-sm font-medium text-black mt-1">
             Your share: ${formatCurrency(myShare)}
@@ -1613,7 +1649,9 @@ function ExpenseCard({
             )}
           </p>
           <p className="text-sm text-gray-500 mt-1">
-            <span className="font-medium">Split with ({expense.splits.length}): </span>
+            <span className="font-medium">
+              Split with ({expense.splits.length}):{" "}
+            </span>
             {expense.splits.map((s: any) => s.user.name).join(", ")}
           </p>
           <p className="text-xs text-gray-400 mt-1">
