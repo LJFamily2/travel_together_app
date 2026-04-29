@@ -7,7 +7,7 @@ export const RollerUnstackReveal = ({
   children,
   index = 0,
   stackOffset = -40,
-  zIndexBase = 100,
+  zIndexBase = 40,
   scrollContainerRef,
 }: {
   children: React.ReactNode;

@@ -333,15 +333,35 @@ export default function SettleUpModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 backdrop-blur-sm">
-      <div className="bg-white p-6 sm:p-8 rounded-[28px] shadow-xl w-full max-w-lg mx-4 sm:mx-0 max-h-[90vh] overflow-y-auto">
-        <div className="flex justify-between items-center mb-4">
-          <h3 className="text-lg font-bold">Settle Up</h3>
-        </div>
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
+      <div className="bg-white rounded-[28px] p-6 md:p-8 w-full max-w-lg shadow-xl relative animate-in fade-in zoom-in duration-200 flex flex-col max-h-[90vh]">
+        <button
+          onClick={onClose}
+          className="absolute top-4 right-4 z-10 bg-white/80 rounded-full p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors cursor-pointer"
+        >
+          <svg
+            className="w-6 h-6"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M6 18L18 6M6 6l12 12"
+            />
+          </svg>
+        </button>
 
-        <div className="mb-6">
-          <h4 className="font-semibold mb-2 text-sm text-gray-600">Balances</h4>
-          <div className="space-y-2">
+        <h2 className="text-2xl font-bold mb-6 text-gray-900 shrink-0 pr-8">
+          Settle Up
+        </h2>
+
+        <div className="space-y-6 overflow-y-auto custom-scrollbar flex-1 pr-2 pb-2">
+          <div>
+            <h4 className="font-semibold mb-3 text-sm text-gray-600">Balances</h4>
+            <div className="space-y-2">
             {members
               .filter((m) => m.id !== currentUser.id)
               .map((member) => {
@@ -737,18 +757,19 @@ export default function SettleUpModal({
             placeholder="e.g. Lunch yesterday"
           />
         </div>
+        </div>
 
-        <div className="flex justify-end gap-2 mt-6">
+        <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-gray-100 shrink-0">
           <button
             onClick={onClose}
-            className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-full transition-colors cursor-pointer"
+            className="px-5 py-2.5 text-gray-600 hover:bg-gray-100 rounded-xl transition-colors font-medium cursor-pointer"
           >
             Cancel
           </button>
           <button
             onClick={handleSettle}
             disabled={loading}
-            className="px-4 py-2 bg-green-600 text-white rounded-full hover:bg-green-700 transition-colors cursor-pointer"
+            className="px-5 py-2.5 bg-green-600 text-white rounded-xl hover:bg-green-700 transition-colors font-medium shadow-sm hover:shadow cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loading ? "Processing..." : "Record Deduction"}
           </button>
