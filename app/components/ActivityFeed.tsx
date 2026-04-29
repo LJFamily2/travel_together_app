@@ -1076,7 +1076,7 @@ export default function ActivityFeed({
               return groups.map(({ dateKey, items }) => (
                 <div key={dateKey}>
                   {/* Sticky date header — works because parent has overflow-y:auto */}
-                  <div className="sticky top-0 z-10 pt-2 pb-3 mb-3 bg-white">
+                  <div className="sticky top-0 z-41 pt-2 pb-3 mb-3 bg-white">
                     <span className="inline-block bg-gray-100 text-gray-500 text-xs font-semibold px-3 py-1 rounded-full shadow-sm">
                       {dateKey}
                     </span>
