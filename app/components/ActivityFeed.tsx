@@ -11,6 +11,7 @@ import { useMutation } from "@apollo/client/react";
 import toast from "react-hot-toast";
 import TailwindDatePicker from "./TailwindDatePicker";
 import { motion } from "framer-motion";
+import RollerUnstackReveal from "./RollerUnstackReveal";
 
 interface Member {
   id: string;
@@ -1059,20 +1060,21 @@ export default function ActivityFeed({
                   </span>
                 </div>
                 <div className="space-y-4">
-                {items.map((expense) => {
+                {items.map((expense, index) => {
               return (
-                <ExpenseCard
-                  key={expense.id}
-                  expense={expense}
-                  currentUserId={currentUserId}
-                  isLeader={isLeader}
-                  formatCurrency={formatCurrency}
-                  setPreviewImage={setPreviewImage}
-                  startEdit={startEdit}
-                  handleDelete={handleDelete}
-                  deleting={deleting}
-                  containerRef={scrollContainerRef}
-                />
+                <RollerUnstackReveal key={expense.id} index={index} scrollContainerRef={scrollContainerRef as React.RefObject<HTMLElement | null>}>
+                  <ExpenseCard
+                    expense={expense}
+                    currentUserId={currentUserId}
+                    isLeader={isLeader}
+                    formatCurrency={formatCurrency}
+                    setPreviewImage={setPreviewImage}
+                    startEdit={startEdit}
+                    handleDelete={handleDelete}
+                    deleting={deleting}
+                    containerRef={scrollContainerRef}
+                  />
+                </RollerUnstackReveal>
               );
             })}
                 </div>
