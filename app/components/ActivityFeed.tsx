@@ -50,6 +50,7 @@ interface Expense {
 
 interface ActivityFeedProps {
   expenses: Expense[];
+  allExpenses?: Expense[];
   actionLogs?: ActionLog[];
   currentUserId: string;
   members: Member[];
@@ -120,6 +121,7 @@ function toDateKey(ts: string | number): string {
 
 export default function ActivityFeed({
   expenses,
+  allExpenses,
   actionLogs = [],
   currentUserId,
   members,
@@ -222,7 +224,7 @@ export default function ActivityFeed({
     optimisticResponse: { deleteExpense: true },
   });
 
-  const filteredExpenses = expenses.filter((expense) => {
+  const isRelevantExpense = (expense: Expense) => {
     const involvesUser =
       expense.splits.some((s) => s.user.id === currentUserId) ||
       (expense.payer.id && expense.payer.id === currentUserId);
@@ -230,9 +232,11 @@ export default function ActivityFeed({
       expense.splits.some((s) => s.baseAmount === 0 && s.deduction > 0) ||
       expense.description.toLowerCase().startsWith("deduction") ||
       expense.description.toLowerCase().startsWith("settlement");
-
     return involvesUser && !isDeduction;
-  });
+  };
+
+  const filteredExpenses = expenses.filter(isRelevantExpense);
+  const allRelevantExpenses = (allExpenses ?? expenses).filter(isRelevantExpense);
 
   // Debounce activity search input
   useEffect(() => {
@@ -243,8 +247,8 @@ export default function ActivityFeed({
     return () => clearTimeout(t);
   }, [activitySearch]);
 
-  // Build unique payer list from filteredExpenses (only payers who paid for the current user)
-  const uniquePayers = filteredExpenses
+  // Build unique payer list from the full matching expense set so filters are complete immediately.
+  const uniquePayers = allRelevantExpenses
     .map((e) => e.payer)
     .filter(
       (p, idx, arr) =>
@@ -273,7 +277,7 @@ export default function ActivityFeed({
     return true;
   });
 
-  const totalInvolvedAmount = filteredExpenses.reduce(
+  const totalInvolvedAmount = allRelevantExpenses.reduce(
     (sum, expense) => sum + expense.totalAmount,
     0,
   );
@@ -285,7 +289,7 @@ export default function ActivityFeed({
       const wb = XLSX.utils.book_new();
 
       // All expenses sheet (no ID column). Include a UserAmount column for the exporting user.
-      const allRows = expenses.map((exp) => {
+      const allRows = allRelevantExpenses.map((exp) => {
         const involves =
           exp.splits.some((s) => s.user.id === currentUserId) ||
           (exp.payer.id && exp.payer.id === currentUserId);

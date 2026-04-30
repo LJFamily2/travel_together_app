@@ -76,6 +76,7 @@ const typeDefs = gql`
 
   type Query {
     getJourneyDetails(slug: String!): Journey
+    getJourneyExpenses(slug: String!): [Expense]
     getUserJourneys: [Journey]
     getJourneyActions(journeyId: ID!, limit: Int): [ActionLog!]!
     getUsers: [User]

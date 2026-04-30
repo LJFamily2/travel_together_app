@@ -105,6 +105,26 @@ const GET_DASHBOARD_DATA = gql`
         createdAt
       }
     }
+    allExpenses: getJourneyExpenses(slug: $slug) {
+      id
+      description
+      totalAmount
+      payer {
+        id
+        name
+      }
+      splits {
+        user {
+          id
+          name
+        }
+        baseAmount
+        deduction
+        reason
+      }
+      hasImage
+      createdAt
+    }
     me {
       id
       name
@@ -170,6 +190,7 @@ interface DashboardData {
     expenses: Expense[];
     actionLogs: ActionLog[];
   };
+  allExpenses: Expense[];
   me: {
     id: string;
     name: string;
@@ -356,6 +377,7 @@ export default function JourneyDashboard() {
 
   const currentUser = data?.me;
   const isLeader = journey?.leader?.id === currentUser?.id;
+  const allExpenses = data?.allExpenses || [];
 
   const isInputLocked =
     journey?.isInputLocked ||
@@ -945,7 +967,7 @@ export default function JourneyDashboard() {
               {/* Left Column: Stats & Actions */}
               <div className="lg:col-span-1 space-y-6">
                 <MyTotalSpend
-                  expenses={journey.expenses}
+                  expenses={allExpenses}
                   currentUserId={currentUser.id}
                 />
 
@@ -964,6 +986,7 @@ export default function JourneyDashboard() {
                   journeyId={journeyId}
                   journeyName={journey.name}
                   expenses={journey.expenses}
+                  allExpenses={allExpenses}
                   actionLogs={journey.actionLogs}
                   currentUserId={currentUser.id}
                   members={journey.members}
@@ -982,7 +1005,7 @@ export default function JourneyDashboard() {
           journeyId={journey.id}
           currentUser={currentUser}
           members={journey.members}
-          expenses={journey.expenses}
+          expenses={allExpenses}
           isOpen={isSettleModalOpen}
           onClose={() => setIsSettleModalOpen(false)}
         />

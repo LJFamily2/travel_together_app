@@ -67,6 +67,38 @@ const getJourneyWithLeaderCheck = async (
   return { journey, userId };
 };
 
+const fetchJourneyExpenses = async (
+  journeyId: mongoose.Types.ObjectId,
+  offset = 0,
+  limit = 0,
+) => {
+  const pipeline: any[] = [
+    { $match: { journeyId } },
+    { $sort: { createdAt: -1 } },
+  ];
+
+  if (offset > 0) pipeline.push({ $skip: offset });
+  if (limit > 0) pipeline.push({ $limit: limit });
+
+  pipeline.push(
+    {
+      $addFields: {
+        hasImage: {
+          $cond: [{ $ifNull: ["$imageBinary", false] }, true, false],
+        },
+        id: "$_id",
+      },
+    },
+    { $project: { imageBinary: 0 } },
+  );
+
+  const expenses = await Expense.aggregate(pipeline);
+  await Expense.populate(expenses, { path: "payerId" });
+  await Expense.populate(expenses, { path: "splits.userId" });
+
+  return expenses;
+};
+
 const journeyResolvers = {
   Query: {
     getJourneyDetails: async (
@@ -107,6 +139,35 @@ const journeyResolvers = {
           : null,
         hasPassword: !!journey.password,
       };
+    },
+    getJourneyExpenses: async (
+      _: unknown,
+      { slug }: { slug: string },
+      context: GraphQLContext,
+    ) => {
+      await dbConnect();
+      const userId = context?.user?.userId;
+
+      const journey = await Journey.findOne({ slug })
+        .populate("leaderId")
+        .populate("members");
+      if (!journey) throw new Error("Journey not found");
+
+      if (!userId) {
+        throw new Error("Unauthorized");
+      }
+
+      const isLeader =
+        (journey.leaderId as any)._id.toString() === userId.toString();
+      const isMember = journey.members.some(
+        (m: any) => m._id.toString() === userId.toString(),
+      );
+
+      if (!isLeader && !isMember) {
+        throw new Error("Unauthorized");
+      }
+
+      return await fetchJourneyExpenses(journey._id);
     },
     getUserJourneys: async (
       _: unknown,
@@ -993,34 +1054,12 @@ const journeyResolvers = {
     },
   },
   Journey: {
-    expenses: async (parent: IJourney, { offset = 0, limit = 0 }: { offset?: number; limit?: number }) => {
+    expenses: async (
+      parent: IJourney,
+      { offset = 0, limit = 0 }: { offset?: number; limit?: number },
+    ) => {
       await dbConnect();
-      const pipeline: any[] = [
-        { $match: { journeyId: parent._id } },
-        { $sort: { createdAt: -1 } }
-      ];
-
-      if (offset > 0) pipeline.push({ $skip: offset });
-      if (limit > 0) pipeline.push({ $limit: limit });
-
-      pipeline.push(
-        {
-          $addFields: {
-            hasImage: {
-              $cond: [{ $ifNull: ["$imageBinary", false] }, true, false],
-            },
-            id: "$_id",
-          },
-        },
-        { $project: { imageBinary: 0 } }
-      );
-
-      const expenses = await Expense.aggregate(pipeline);
-
-      await Expense.populate(expenses, { path: "payerId" });
-      await Expense.populate(expenses, { path: "splits.userId" });
-
-      return expenses;
+      return await fetchJourneyExpenses(parent._id, offset, limit);
     },
     actionLogs: async (parent: IJourney) => {
       await dbConnect();
