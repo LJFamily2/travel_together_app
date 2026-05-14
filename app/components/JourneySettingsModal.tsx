@@ -68,11 +68,11 @@ export default function JourneySettingsModal({
 }: JourneySettingsModalProps) {
   const [password, setPassword] = useState("");
   const [requireApproval, setRequireApproval] = useState(
-    currentRequireApproval ?? false
+    currentRequireApproval ?? false,
   );
   const [isLocked, setIsLocked] = useState(currentIsLocked ?? false);
   const [isInputLocked, setIsInputLocked] = useState(
-    currentIsInputLocked ?? false
+    currentIsInputLocked ?? false,
   );
 
   const [setJourneyPassword] = useMutation(SET_JOURNEY_PASSWORD);
@@ -89,7 +89,7 @@ export default function JourneySettingsModal({
         },
       });
       toast.success(
-        password ? "Password set successfully" : "Password removed"
+        password ? "Password set successfully" : "Password removed",
       );
       setPassword("");
     } catch (error) {
@@ -150,7 +150,7 @@ export default function JourneySettingsModal({
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
-      <div className="bg-white rounded-3xl p-6 md:p-8 w-full max-w-md shadow-xl relative animate-in fade-in zoom-in duration-200 flex flex-col max-h-[90vh]">
+      <div className="bg-white rounded-3xl px-6 pt-6 pb-6 md:px-8 md:pt-8 md:pb-8 w-full max-w-md shadow-xl relative animate-in fade-in zoom-in duration-200 flex flex-col max-h-[90vh]">
         <button
           onClick={onClose}
           className="absolute top-4 right-4 z-10 bg-white/80 rounded-full p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors cursor-pointer"
@@ -174,7 +174,7 @@ export default function JourneySettingsModal({
           Journey Settings
         </h2>
 
-        <div className="space-y-6 overflow-y-auto custom-scrollbar flex-1 pr-2 pb-2">
+        <div className="space-y-6 overflow-y-auto custom-scrollbar flex-1 pb-2">
           {/* Lock Journey Invitation Toggle */}
           <div className="bg-gray-50 p-4 rounded-2xl border border-gray-100 flex items-center justify-between">
             <div>
@@ -271,13 +271,13 @@ export default function JourneySettingsModal({
                 placeholder={
                   hasPassword ? "Change password" : "Enter new password"
                 }
-                className="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl bg-white focus:ring-2 focus:ring-black/5 outline-none transition-all text-sm"
+                className="flex-1 min-w-0 px-4 py-2.5 border border-gray-200 rounded-xl bg-white focus:ring-2 focus:ring-black/5 outline-none transition-all text-sm"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
               />
               <button
                 onClick={handleSavePassword}
-                className="bg-black text-white px-4 py-2.5 rounded-xl text-sm font-medium hover:bg-gray-800 transition-colors cursor-pointer"
+                className="shrink-0 bg-black text-white px-4 py-2.5 rounded-xl text-sm font-medium hover:bg-gray-800 transition-colors cursor-pointer"
               >
                 Save
               </button>
