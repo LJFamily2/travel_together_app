@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
-import { useState, useRef, ChangeEvent } from "react";
+import { useState, useEffect, useRef, ChangeEvent } from "react";
 import { useCurrency } from "../context/CurrencyContext";
 import { gql } from "@apollo/client";
 import { useApolloClient } from "@apollo/client/react";
@@ -16,6 +16,7 @@ const ADD_EXPENSE = gql`
     $totalAmount: Float!
     $description: String!
     $splits: [SplitInput]!
+    $currency: String
     $imageBase64: String
   ) {
     addExpense(
@@ -24,11 +25,13 @@ const ADD_EXPENSE = gql`
       totalAmount: $totalAmount
       description: $description
       splits: $splits
+      currency: $currency
       imageBase64: $imageBase64
     ) {
       id
       description
       totalAmount
+      currency
       hasImage
       payer {
         id
@@ -59,6 +62,7 @@ interface AddExpenseFormProps {
   members: Member[];
   isLocked?: boolean;
   onExpenseAdded?: () => void;
+  onClose?: () => void;
 }
 
 export default function AddExpenseForm({
@@ -67,11 +71,19 @@ export default function AddExpenseForm({
   members,
   isLocked = false,
   onExpenseAdded,
+  onClose,
 }: AddExpenseFormProps) {
-  const { formatCurrency } = useCurrency();
+  const { formatCurrency, baseCurrency, journeyCurrencies } = useCurrency();
   const client = useApolloClient();
   const [amount, setAmount] = useState("");
+  const [currency, setCurrency] = useState<string>("");
   const [description, setDescription] = useState("");
+
+  useEffect(() => {
+    if (baseCurrency && !currency) {
+      setCurrency(baseCurrency.code);
+    }
+  }, [baseCurrency, currency]);
   const [imageBase64, setImageBase64] = useState<string | null>(null);
   const [payerId, setPayerId] = useState(currentUser.id);
   const [isPayerDropdownOpen, setIsPayerDropdownOpen] = useState(false);
@@ -105,6 +117,7 @@ export default function AddExpenseForm({
             id
             description
             totalAmount
+            currency
             hasImage
             payer {
               id
@@ -167,6 +180,7 @@ export default function AddExpenseForm({
           id: tempId,
           description: vars.description,
           totalAmount: vars.totalAmount,
+          currency: vars.currency,
           hasImage: !!vars.imageBase64,
           payer: { __typename: "User", id: payer.id, name: payer.name },
           splits: splitsForOpt.map((sp: any) => ({
@@ -290,6 +304,7 @@ export default function AddExpenseForm({
           totalAmount: parseFloat(amount),
           description,
           splits,
+          currency: currency === baseCurrency?.code ? null : currency,
           imageBase64,
         },
       });
@@ -317,11 +332,25 @@ export default function AddExpenseForm({
 
   if (isLocked) {
     return (
-      <div className="p-6 border border-gray-100 rounded-[34px] shadow-sm bg-gray-50 text-center">
-        <h3 className="text-lg font-bold mb-2 text-gray-400">
-          Add New Expense
-        </h3>
-        <p className="text-gray-500 text-sm">
+      <div className="p-6 border border-gray-100 rounded-[34px] shadow-sm bg-gray-50 relative">
+        <div className="flex justify-between items-center mb-2">
+          <h3 className="text-lg font-bold text-gray-400">
+            Add New Expense
+          </h3>
+          {onClose && (
+            <button
+              type="button"
+              onClick={onClose}
+              className="text-gray-400 hover:text-gray-600 p-2 rounded-full hover:bg-gray-100 transition-colors cursor-pointer"
+              aria-label="Close"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          )}
+        </div>
+        <p className="text-gray-500 text-sm text-center">
           This journey is locked. No new expenses can be added.
         </p>
       </div>
@@ -333,7 +362,21 @@ export default function AddExpenseForm({
       onSubmit={handleSubmit}
       className="p-6 border border-gray-100 rounded-[34px] shadow-sm bg-white"
     >
-      <h3 className="text-lg font-bold mb-4">Add New Expense</h3>
+      <div className="flex justify-between items-center mb-4">
+        <h3 className="text-lg font-bold">Add New Expense</h3>
+        {onClose && (
+          <button
+            type="button"
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600 p-2 rounded-full hover:bg-gray-100 transition-colors cursor-pointer"
+            aria-label="Close"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        )}
+      </div>
 
       <div className="mb-4">
         <label className="block text-sm font-medium mb-1 text-gray-700">
@@ -353,15 +396,29 @@ export default function AddExpenseForm({
         <label className="block text-sm font-medium mb-1 text-gray-700">
           Amount
         </label>
-        <input
-          type="number"
-          value={amount}
-          onChange={(e) => setAmount(e.target.value)}
-          className="w-full p-3 border border-gray-200 rounded-xl bg-gray-50 focus:bg-white transition-colors"
-          placeholder="0.00"
-          step="0.01"
-          required
-        />
+        <div className="flex gap-2">
+          <input
+            type="number"
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+            className="w-full p-3 border border-gray-200 rounded-xl bg-gray-50 focus:bg-white transition-colors"
+            placeholder="0.00"
+            step="0.01"
+            required
+          />
+          {baseCurrency && journeyCurrencies.length > 0 && (
+            <select
+              value={currency}
+              onChange={(e) => setCurrency(e.target.value)}
+              className="p-3 border border-gray-200 rounded-xl bg-gray-50 focus:bg-white transition-colors w-28 cursor-pointer text-gray-700 font-medium outline-none"
+            >
+              <option value={baseCurrency.code}>{baseCurrency.code}</option>
+              {journeyCurrencies.map(c => (
+                <option key={c.code} value={c.code}>{c.code}</option>
+              ))}
+            </select>
+          )}
+        </div>
       </div>
 
       <div className="mb-4">
@@ -378,13 +435,12 @@ export default function AddExpenseForm({
             className="w-full flex items-center justify-between p-3 border border-gray-200 rounded-xl bg-gray-50 hover:bg-white transition-colors cursor-pointer text-left"
           >
             <span className="truncate pr-2">
-              {uniqueMembers.find((m) => m.id === payerId)?.name} 
+              {uniqueMembers.find((m) => m.id === payerId)?.name}
               {payerId === currentUser.id ? " (You)" : ""}
             </span>
             <svg
-              className={`w-4 h-4 text-gray-500 transition-transform ${
-                isPayerDropdownOpen ? "rotate-180" : ""
-              }`}
+              className={`w-4 h-4 text-gray-500 transition-transform ${isPayerDropdownOpen ? "rotate-180" : ""
+                }`}
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -393,11 +449,11 @@ export default function AddExpenseForm({
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path>
             </svg>
           </button>
-          
+
           {isPayerDropdownOpen && (
             <>
-              <div 
-                className="fixed inset-0 z-40" 
+              <div
+                className="fixed inset-0 z-40"
                 onClick={() => setIsPayerDropdownOpen(false)}
               ></div>
               <div className="absolute z-50 w-full mt-2 bg-white border border-gray-200 rounded-xl shadow-2xl ring-1 ring-black/5 overflow-hidden flex flex-col">
@@ -418,9 +474,8 @@ export default function AddExpenseForm({
                       <button
                         key={m.id}
                         type="button"
-                        className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 cursor-pointer ${
-                          payerId === m.id ? "bg-blue-50 font-medium text-blue-700" : "text-gray-700"
-                        }`}
+                        className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 cursor-pointer ${payerId === m.id ? "bg-blue-50 font-medium text-blue-700" : "text-gray-700"
+                          }`}
                         onClick={() => {
                           setPayerId(m.id);
                           setIsPayerDropdownOpen(false);
@@ -449,22 +504,20 @@ export default function AddExpenseForm({
             <button
               type="button"
               onClick={() => setSplitType("equal")}
-              className={`cursor-pointer px-3 py-1 text-xs font-medium rounded-md transition-all ${
-                splitType === "equal"
+              className={`cursor-pointer px-3 py-1 text-xs font-medium rounded-md transition-all ${splitType === "equal"
                   ? "bg-white text-black shadow-sm"
                   : "text-gray-500 hover:text-gray-700"
-              }`}
+                }`}
             >
               Equally
             </button>
             <button
               type="button"
               onClick={() => setSplitType("separate")}
-              className={`cursor-pointer px-3 py-1 text-xs font-medium rounded-md transition-all ${
-                splitType === "separate"
+              className={`cursor-pointer px-3 py-1 text-xs font-medium rounded-md transition-all ${splitType === "separate"
                   ? "bg-white text-black shadow-sm"
                   : "text-gray-500 hover:text-gray-700"
-              }`}
+                }`}
             >
               Separate
             </button>
@@ -524,11 +577,10 @@ export default function AddExpenseForm({
                         onClick={() => toggleMemberSelection(member.id)}
                         className={`
                       flex items-center justify-center px-3 py-1 rounded-full text-sm border transition-all cursor-pointer
-                      ${
-                        isSelected
-                          ? "bg-black text-white border-black shadow-sm"
-                          : "bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100"
-                      }
+                      ${isSelected
+                            ? "bg-black text-white border-black shadow-sm"
+                            : "bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100"
+                          }
                     `}
                       >
                         {member.name}
@@ -565,16 +617,15 @@ export default function AddExpenseForm({
               <div className="text-sm mb-1">
                 <span className="text-gray-500 mr-2">Total:</span>
                 <span
-                  className={`font-bold ${
-                    Math.abs(
-                      Object.values(individualAmounts).reduce(
-                        (sum, val) => sum + (parseFloat(val) || 0),
-                        0
-                      ) - parseFloat(amount || "0")
-                    ) < 0.01
+                  className={`font-bold ${Math.abs(
+                    Object.values(individualAmounts).reduce(
+                      (sum, val) => sum + (parseFloat(val) || 0),
+                      0
+                    ) - parseFloat(amount || "0")
+                  ) < 0.01
                       ? "text-green-600"
                       : "text-red-500"
-                  }`}
+                    }`}
                 >
                   {Object.values(individualAmounts)
                     .reduce((sum, val) => sum + (parseFloat(val) || 0), 0)
@@ -591,10 +642,10 @@ export default function AddExpenseForm({
                   className={
                     Math.abs(
                       parseFloat(amount || "0") -
-                        Object.values(individualAmounts).reduce(
-                          (sum, val) => sum + (parseFloat(val) || 0),
-                          0
-                        )
+                      Object.values(individualAmounts).reduce(
+                        (sum, val) => sum + (parseFloat(val) || 0),
+                        0
+                      )
                     ) < 0.01
                       ? "text-green-600 font-medium"
                       : "text-red-500 font-bold"

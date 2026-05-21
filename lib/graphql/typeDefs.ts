@@ -17,6 +17,21 @@ const typeDefs = gql`
     isGuest: Boolean
   }
 
+  type CurrencyConfig {
+    code: String!
+    name: String!
+    symbol: String!
+    countryCode: String!
+    exchangeRate: Float!
+  }
+
+  type BaseCurrency {
+    code: String!
+    name: String!
+    symbol: String!
+    countryCode: String!
+  }
+
   type Journey {
     id: ID!
     slug: String!
@@ -35,6 +50,8 @@ const typeDefs = gql`
     isLocked: Boolean
     isInputLocked: Boolean
     actionLogs: [ActionLog!]!
+    baseCurrency: BaseCurrency
+    currencies: [CurrencyConfig]
   }
 
   type ActionLog {
@@ -66,6 +83,7 @@ const typeDefs = gql`
     splits: [Split]!
     createdAt: String!
     hasImage: Boolean
+    currency: String
   }
 
   type GuestUserResponse {
@@ -97,6 +115,11 @@ const typeDefs = gql`
       startDate: String
       endDate: String
     ): Journey
+    updateJourneyCurrencies(
+      journeyId: ID!
+      baseCurrency: BaseCurrencyInput
+      currencies: [CurrencyConfigInput]!
+    ): Journey
     createGuestUser(journeyId: ID!, name: String!): GuestUserResponse
     regenerateGuestInvite(journeyId: ID!, userId: ID!): GuestUserResponse
     claimGuestUser(token: String!, password: String): AuthPayload
@@ -108,6 +131,7 @@ const typeDefs = gql`
       description: String!
       splits: [SplitInput]!
       imageBase64: String
+      currency: String
     ): Expense
     updateExpense(
       expenseId: ID!
@@ -116,6 +140,7 @@ const typeDefs = gql`
       description: String
       splits: [SplitInput]
       imageBase64: String
+      currency: String
     ): Expense
     deleteExpense(expenseId: ID!): Boolean
     joinAsGuest(name: String!, journeyId: ID!): AuthPayload
@@ -146,6 +171,21 @@ const typeDefs = gql`
     baseAmount: Float!
     deduction: Float
     reason: String
+  }
+
+  input CurrencyConfigInput {
+    code: String!
+    name: String!
+    symbol: String!
+    countryCode: String!
+    exchangeRate: Float!
+  }
+
+  input BaseCurrencyInput {
+    code: String!
+    name: String!
+    symbol: String!
+    countryCode: String!
   }
 `;
 

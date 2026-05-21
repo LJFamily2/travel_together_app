@@ -14,6 +14,7 @@ export interface IExpense extends Document {
   imageBinary?: Buffer; // Using Buffer for GridFS or direct storage if small enough, though TODO mentions GridFS
   description: string;
   splits: ISplit[];
+  currency?: string; // ISO 4217 code, null = base currency
   createdAt: Date;
   expireAt?: Date;
 }
@@ -33,6 +34,7 @@ const ExpenseSchema: Schema = new Schema(
     imageBinary: { type: Buffer }, // Storing directly for now as per schema description, but GridFS is recommended for large files
     description: { type: String, required: true },
     splits: [SplitSchema],
+    currency: { type: String }, // ISO 4217 code, null = base currency
     expireAt: { type: Date },
   },
   { timestamps: true }

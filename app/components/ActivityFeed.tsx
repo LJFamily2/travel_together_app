@@ -44,6 +44,7 @@ interface Expense {
     deduction: number;
     reason?: string;
   }[];
+  currency?: string | null;
   hasImage: boolean;
   createdAt: string;
 }
@@ -70,6 +71,7 @@ const UPDATE_EXPENSE = gql`
     $totalAmount: Float
     $description: String
     $splits: [SplitInput]
+    $currency: String
     $imageBase64: String
   ) {
     updateExpense(
@@ -78,12 +80,13 @@ const UPDATE_EXPENSE = gql`
       totalAmount: $totalAmount
       description: $description
       splits: $splits
+      currency: $currency
       imageBase64: $imageBase64
     ) {
       id
       totalAmount
       description
-      id
+      currency
       hasImage
       payer {
         id
@@ -133,17 +136,39 @@ export default function ActivityFeed({
   hasMoreExpenses = false,
   loadingMoreExpenses = false,
 }: ActivityFeedProps) {
-  const { formatCurrency } = useCurrency();
+  const { formatAmount, convertToBase, baseCurrency, formatCurrency, journeyCurrencies } = useCurrency();
   const client = useApolloClient();
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
 
   // Edit Form State
   const [amount, setAmount] = useState("");
+  const [editCurrency, setEditCurrency] = useState("");
   const [description, setDescription] = useState("");
   const [payerId, setPayerId] = useState("");
   const [imageBase64, setImageBase64] = useState<string | null>(null);
-  // Image preview state for full-screen clickable preview
-  const [previewImage, setPreviewImage] = useState<string | null>(null);
+  // Image preview state for full-screen clickable preview (stores URL and custom download filename/title)
+  const [previewImage, setPreviewImage] = useState<{ url: string; title: string } | null>(null);
+
+  const downloadImage = async (imageUrl: string, filename: string) => {
+    try {
+      const response = await fetch(imageUrl);
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch {
+      const link = document.createElement("a");
+      link.href = imageUrl;
+      link.target = "_blank";
+      link.download = filename;
+      link.click();
+    }
+  };
 
   // Split logic state
   const [splitType, setSplitType] = useState<"equal" | "separate">("equal");
@@ -218,7 +243,7 @@ export default function ActivityFeed({
       } catch (e) {
         try {
           client.refetchQueries({ include: "active" });
-        } catch (_) {}
+        } catch (_) { }
       }
     },
     optimisticResponse: { deleteExpense: true },
@@ -278,7 +303,7 @@ export default function ActivityFeed({
   });
 
   const totalInvolvedAmount = allRelevantExpenses.reduce(
-    (sum, expense) => sum + expense.totalAmount,
+    (sum, expense) => sum + convertToBase(expense.totalAmount, expense.currency),
     0,
   );
 
@@ -304,6 +329,7 @@ export default function ActivityFeed({
           Description: exp.description,
           Payer: exp.payer.name,
           Total: exp.totalAmount,
+          Currency: exp.currency || baseCurrency?.code || "",
           CreatedAt: new Date(parseInt(exp.createdAt)).toLocaleString(),
           Splits: exp.splits
             .map(
@@ -330,6 +356,7 @@ export default function ActivityFeed({
         Description: "TOTAL",
         Payer: "",
         Total: totalSum,
+        Currency: "",
         CreatedAt: "",
         Splits: "",
         UserAmount: userSum,
@@ -373,6 +400,7 @@ export default function ActivityFeed({
                   Description: exp.description,
                   OwedBy: s.user.name,
                   OwedAmount: amt,
+                  Currency: exp.currency || baseCurrency?.code || "",
                   ExpenseTotal: exp.totalAmount,
                   CreatedAt: new Date(parseInt(exp.createdAt)).toLocaleString(),
                 });
@@ -389,6 +417,7 @@ export default function ActivityFeed({
         Description: "TOTAL",
         OwedBy: "",
         OwedAmount: totalOthersOweYou,
+        Currency: "",
         ExpenseTotal: "",
         CreatedAt: "",
       });
@@ -407,6 +436,7 @@ export default function ActivityFeed({
                 Description: exp.description,
                 Payer: exp.payer.name,
                 YourAmount: amt,
+                Currency: exp.currency || baseCurrency?.code || "",
                 ExpenseTotal: exp.totalAmount,
                 CreatedAt: new Date(parseInt(exp.createdAt)).toLocaleString(),
               });
@@ -422,6 +452,7 @@ export default function ActivityFeed({
         Description: "TOTAL",
         Payer: "",
         YourAmount: totalYouOweOthers,
+        Currency: "",
         ExpenseTotal: "",
         CreatedAt: "",
       });
@@ -463,6 +494,7 @@ export default function ActivityFeed({
   const startEdit = (expense: Expense) => {
     setEditingExpense(expense);
     setAmount(expense.totalAmount.toString());
+    setEditCurrency(expense.currency || baseCurrency?.code || "");
     setDescription(expense.description);
     setPayerId(expense.payer.id || currentUserId);
     setImageBase64(null); // Reset image, only send if changed
@@ -498,6 +530,7 @@ export default function ActivityFeed({
   const closeEdit = () => {
     setEditingExpense(null);
     setAmount("");
+    setEditCurrency("");
     setDescription("");
     setPayerId("");
     setImageBase64(null);
@@ -604,6 +637,7 @@ export default function ActivityFeed({
           totalAmount: parsedAmount,
           description,
           splits,
+          currency: editCurrency === baseCurrency?.code ? null : editCurrency,
           imageBase64, // Only sends if changed (not null)
         },
       });
@@ -658,21 +692,19 @@ export default function ActivityFeed({
         <div className="flex bg-gray-100 p-1 rounded-full w-fit">
           <button
             onClick={() => setViewMode("expenses")}
-            className={`px-5 py-2 rounded-full text-sm font-medium transition-all ${
-              viewMode === "expenses"
-                ? "bg-white text-blue-600 shadow-sm"
-                : "text-gray-500 hover:text-gray-700"
-            } cursor-pointer`}
+            className={`px-5 py-2 rounded-full text-sm font-medium transition-all ${viewMode === "expenses"
+              ? "bg-white text-blue-600 shadow-sm"
+              : "text-gray-500 hover:text-gray-700"
+              } cursor-pointer`}
           >
             Expenses
           </button>
           <button
             onClick={() => setViewMode("actions")}
-            className={`px-5 py-2 rounded-full text-sm font-medium transition-all ${
-              viewMode === "actions"
-                ? "bg-white text-blue-600 shadow-sm"
-                : "text-gray-500 hover:text-gray-700"
-            } cursor-pointer`}
+            className={`px-5 py-2 rounded-full text-sm font-medium transition-all ${viewMode === "actions"
+              ? "bg-white text-blue-600 shadow-sm"
+              : "text-gray-500 hover:text-gray-700"
+              } cursor-pointer`}
           >
             Activity Logs
           </button>
@@ -681,7 +713,7 @@ export default function ActivityFeed({
         {viewMode === "expenses" && (
           <div className="flex items-center gap-3">
             <span className="font-semibold text-gray-700">
-              Total: ${formatCurrency(totalInvolvedAmount)}
+              Total: {formatAmount(totalInvolvedAmount)}
             </span>
             <button
               onClick={exportToExcel}
@@ -776,7 +808,7 @@ export default function ActivityFeed({
                         if (log.metadata) {
                           metaObj = JSON.parse(log.metadata);
                         }
-                      } catch (e) {}
+                      } catch (e) { }
 
                       let sentence: string;
                       switch (log.action) {
@@ -846,7 +878,7 @@ export default function ActivityFeed({
                           b.totalAmount !== a.totalAmount
                         ) {
                           changes.push(
-                            `Amount: $${formatCurrency(b.totalAmount)} ➔ $${formatCurrency(a.totalAmount)}`,
+                            `Amount: ${formatAmount(b.totalAmount, b.currency)} ➔ ${formatAmount(a.totalAmount, a.currency)}`,
                           );
                         }
                         if (b.payerId && a.payerId && b.payerId !== a.payerId) {
@@ -862,7 +894,7 @@ export default function ActivityFeed({
                       return (
                         <div
                           key={log.id}
-                          className="p-4 border border-gray-100 rounded-2xl shadow-sm bg-white flex items-start gap-4"
+                          className="p-4 border border-gray-300 rounded-2xl bg-white flex items-start gap-4"
                         >
                           <div className="bg-blue-50 text-blue-500 p-2 rounded-full mt-1 shrink-0">
                             <svg
@@ -945,13 +977,12 @@ export default function ActivityFeed({
                     {payerFilter === ""
                       ? "All payers"
                       : uniquePayers.find(
-                          (p) => (p.id || p.name) === payerFilter,
-                        )?.name || payerFilter}
+                        (p) => (p.id || p.name) === payerFilter,
+                      )?.name || payerFilter}
                   </span>
                   <svg
-                    className={`w-4 h-4 text-gray-500 transition-transform ${
-                      isFilterDropdownOpen ? "rotate-180" : ""
-                    }`}
+                    className={`w-4 h-4 text-gray-500 transition-transform ${isFilterDropdownOpen ? "rotate-180" : ""
+                      }`}
                     fill="none"
                     stroke="currentColor"
                     viewBox="0 0 24 24"
@@ -986,11 +1017,10 @@ export default function ActivityFeed({
                       <div className="max-h-56 overflow-y-auto py-1 custom-scrollbar">
                         <button
                           type="button"
-                          className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 cursor-pointer ${
-                            payerFilter === ""
-                              ? "bg-blue-50 font-medium text-blue-700"
-                              : "text-gray-700"
-                          }`}
+                          className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 cursor-pointer ${payerFilter === ""
+                            ? "bg-blue-50 font-medium text-blue-700"
+                            : "text-gray-700"
+                            }`}
                           onClick={() => {
                             setPayerFilter("");
                             setIsFilterDropdownOpen(false);
@@ -1009,11 +1039,10 @@ export default function ActivityFeed({
                             <button
                               key={p.id || p.name}
                               type="button"
-                              className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 cursor-pointer ${
-                                payerFilter === (p.id || p.name)
-                                  ? "bg-blue-50 font-medium text-blue-700"
-                                  : "text-gray-700"
-                              }`}
+                              className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 cursor-pointer ${payerFilter === (p.id || p.name)
+                                ? "bg-blue-50 font-medium text-blue-700"
+                                : "text-gray-700"
+                                }`}
                               onClick={() => {
                                 setPayerFilter(p.id || p.name);
                                 setIsFilterDropdownOpen(false);
@@ -1028,10 +1057,10 @@ export default function ActivityFeed({
                             .toLowerCase()
                             .includes(filterSearchQuery.toLowerCase()),
                         ).length === 0 && (
-                          <div className="px-4 py-3 text-sm text-gray-500 text-center">
-                            No payers found
-                          </div>
-                        )}
+                            <div className="px-4 py-3 text-sm text-gray-500 text-center">
+                              No payers found
+                            </div>
+                          )}
                       </div>
                     </div>
                   </>
@@ -1048,7 +1077,7 @@ export default function ActivityFeed({
               const target = e.currentTarget;
               if (
                 target.scrollHeight - target.scrollTop <=
-                  target.clientHeight + 100 &&
+                target.clientHeight + 100 &&
                 !loadingMoreExpenses &&
                 hasMoreExpenses &&
                 onLoadMoreExpenses
@@ -1092,14 +1121,16 @@ export default function ActivityFeed({
                           key={expense.id}
                           index={index}
                           scrollContainerRef={
-                            scrollContainerRef as React.RefObject<HTMLElement | null>
+                            scrollContainerRef as React.RefObject<HTMLDivElement | null>
                           }
                         >
                           <ExpenseCard
                             expense={expense}
                             currentUserId={currentUserId}
                             isLeader={isLeader}
-                            formatCurrency={formatCurrency}
+                            formatAmount={formatAmount}
+                            convertToBase={convertToBase}
+                            baseCurrency={baseCurrency}
                             setPreviewImage={setPreviewImage}
                             startEdit={startEdit}
                             handleDelete={handleDelete}
@@ -1121,35 +1152,74 @@ export default function ActivityFeed({
           </div>
           {previewImage && (
             <div
-              className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+              className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/90 backdrop-blur-md transition-all duration-300"
               onClick={() => setPreviewImage(null)}
               role="dialog"
               aria-modal="true"
             >
-              <div className="max-w-[90vw] max-h-[90vh] w-full flex items-center justify-center">
-                <div
-                  className="relative overflow-auto max-w-full max-h-full bg-transparent"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setPreviewImage(null);
-                    }}
-                    aria-label="Close image preview"
-                    className="absolute top-2 right-2 z-50 text-white bg-black/40 rounded-full p-2 cursor-pointer"
-                  >
-                    ✕
-                  </button>
+              <motion.div
+                initial={{ opacity: 0, scale: 0.98, y: 10 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.98, y: 10 }}
+                transition={{ type: "spring", damping: 25, stiffness: 350 }}
+                className="bg-neutral-950/95 border border-white/10 rounded-3xl overflow-hidden w-full h-full max-w-[96vw] max-h-[96vh] shadow-2xl relative flex flex-col"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {/* Header / Title Bar */}
+                <div className="flex items-center justify-between px-6 py-4 border-b border-white/10 bg-white/5 flex-shrink-0">
+                  <div className="flex items-center gap-2.5 min-w-0 flex-1 mr-4">
+                    <svg className="w-5 h-5 text-gray-300 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    <span className="font-semibold text-white tracking-wide text-sm truncate" title={previewImage.title}>
+                      {previewImage.title || "Receipt Attachment"}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    {/* Download Image Button */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const cleanTitle = (previewImage.title || "receipt")
+                          .normalize("NFD")
+                          .replace(/[\u0300-\u036f]/g, "")
+                          .replace(/[^a-zA-Z0-9]+/g, "_")
+                          .toLowerCase();
+                        downloadImage(previewImage.url, `receipt_${cleanTitle}.jpg`);
+                      }}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-full text-xs font-semibold shadow-sm transition-all cursor-pointer mr-1 active:scale-95"
+                      title="Download receipt image"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                      </svg>
+                      Download Image
+                    </button>
+
+                    {/* Close Button */}
+                    <button
+                      type="button"
+                      onClick={() => setPreviewImage(null)}
+                      aria-label="Close image preview"
+                      className="p-2 text-gray-300 hover:text-white hover:bg-white/10 rounded-full transition-all cursor-pointer"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Image Content Container */}
+                <div className="flex-1 overflow-hidden p-6 flex items-center justify-center bg-black/40 select-none">
                   <img
-                    src={previewImage}
-                    alt="Preview large"
-                    className="block max-w-none max-h-none object-contain"
-                    style={{ display: "block" }}
+                    src={previewImage.url}
+                    alt="Receipt preview"
+                    className="max-w-full max-h-full object-contain rounded-xl shadow-xl transition-all duration-300 hover:scale-[1.01]"
                   />
                 </div>
-              </div>
+              </motion.div>
             </div>
           )}
 
@@ -1181,14 +1251,28 @@ export default function ActivityFeed({
                       <label className="block text-sm font-medium mb-1 text-gray-700">
                         Amount
                       </label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        className="w-full p-3 border border-gray-200 rounded-xl bg-gray-50 focus:bg-white transition-colors"
-                        value={amount}
-                        onChange={(e) => setAmount(e.target.value)}
-                        required
-                      />
+                      <div className="flex gap-2">
+                        <input
+                          type="number"
+                          step="0.01"
+                          className="w-full p-3 border border-gray-200 rounded-xl bg-gray-50 focus:bg-white transition-colors"
+                          value={amount}
+                          onChange={(e) => setAmount(e.target.value)}
+                          required
+                        />
+                        {baseCurrency && journeyCurrencies.length > 0 && (
+                          <select
+                            value={editCurrency}
+                            onChange={(e) => setEditCurrency(e.target.value)}
+                            className="p-3 border border-gray-200 rounded-xl bg-gray-50 focus:bg-white transition-colors w-28 cursor-pointer text-gray-700 font-medium outline-none"
+                          >
+                            <option value={baseCurrency.code}>{baseCurrency.code}</option>
+                            {journeyCurrencies.map(c => (
+                              <option key={c.code} value={c.code}>{c.code}</option>
+                            ))}
+                          </select>
+                        )}
+                      </div>
                     </div>
                     <div>
                       <label className="block text-sm font-medium mb-1 text-gray-700">
@@ -1214,9 +1298,8 @@ export default function ActivityFeed({
                             {payerId === currentUserId ? " (You)" : ""}
                           </span>
                           <svg
-                            className={`w-4 h-4 text-gray-500 transition-transform ${
-                              isEditPayerDropdownOpen ? "rotate-180" : ""
-                            }`}
+                            className={`w-4 h-4 text-gray-500 transition-transform ${isEditPayerDropdownOpen ? "rotate-180" : ""
+                              }`}
                             fill="none"
                             stroke="currentColor"
                             viewBox="0 0 24 24"
@@ -1263,11 +1346,10 @@ export default function ActivityFeed({
                                     <button
                                       key={member.id}
                                       type="button"
-                                      className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 cursor-pointer ${
-                                        payerId === member.id
-                                          ? "bg-blue-50 font-medium text-blue-700"
-                                          : "text-gray-700"
-                                      }`}
+                                      className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 cursor-pointer ${payerId === member.id
+                                        ? "bg-blue-50 font-medium text-blue-700"
+                                        : "text-gray-700"
+                                        }`}
                                       onClick={() => {
                                         setPayerId(member.id);
                                         setIsEditPayerDropdownOpen(false);
@@ -1287,10 +1369,10 @@ export default function ActivityFeed({
                                       editPayerSearchQuery.toLowerCase(),
                                     ),
                                 ).length === 0 && (
-                                  <div className="px-4 py-3 text-sm text-gray-500 text-center">
-                                    No members found
-                                  </div>
-                                )}
+                                    <div className="px-4 py-3 text-sm text-gray-500 text-center">
+                                      No members found
+                                    </div>
+                                  )}
                               </div>
                             </div>
                           </>
@@ -1308,22 +1390,20 @@ export default function ActivityFeed({
                           <button
                             type="button"
                             onClick={() => setSplitType("equal")}
-                            className={`cursor-pointer px-3 py-1 text-xs font-medium rounded-md transition-all ${
-                              splitType === "equal"
-                                ? "bg-white text-black shadow-sm"
-                                : "text-gray-500 hover:text-gray-700"
-                            }`}
+                            className={`cursor-pointer px-3 py-1 text-xs font-medium rounded-md transition-all ${splitType === "equal"
+                              ? "bg-white text-black shadow-sm"
+                              : "text-gray-500 hover:text-gray-700"
+                              }`}
                           >
                             Equally
                           </button>
                           <button
                             type="button"
                             onClick={() => setSplitType("separate")}
-                            className={`cursor-pointer px-3 py-1 text-xs font-medium rounded-md transition-all ${
-                              splitType === "separate"
-                                ? "bg-white text-black shadow-sm"
-                                : "text-gray-500 hover:text-gray-700"
-                            }`}
+                            className={`cursor-pointer px-3 py-1 text-xs font-medium rounded-md transition-all ${splitType === "separate"
+                              ? "bg-white text-black shadow-sm"
+                              : "text-gray-500 hover:text-gray-700"
+                              }`}
                           >
                             Separate
                           </button>
@@ -1395,10 +1475,9 @@ export default function ActivityFeed({
                                         }
                                         className={`
                                           flex items-center justify-center px-3 py-1 rounded-full text-sm border transition-all cursor-pointer
-                                          ${
-                                            isSelected
-                                              ? "bg-black text-white border-black shadow-sm"
-                                              : "bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100"
+                                          ${isSelected
+                                            ? "bg-black text-white border-black shadow-sm"
+                                            : "bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100"
                                           }
                                         `}
                                       >
@@ -1452,17 +1531,16 @@ export default function ActivityFeed({
                             <div className="text-sm mb-1">
                               <span className="text-gray-500 mr-2">Total:</span>
                               <span
-                                className={`font-bold ${
-                                  Math.abs(
-                                    Object.values(individualAmounts).reduce(
-                                      (sum, val) =>
-                                        sum + (parseFloat(val) || 0),
-                                      0,
-                                    ) - parseFloat(amount || "0"),
-                                  ) < 0.01
-                                    ? "text-green-600"
-                                    : "text-red-500"
-                                }`}
+                                className={`font-bold ${Math.abs(
+                                  Object.values(individualAmounts).reduce(
+                                    (sum, val) =>
+                                      sum + (parseFloat(val) || 0),
+                                    0,
+                                  ) - parseFloat(amount || "0"),
+                                ) < 0.01
+                                  ? "text-green-600"
+                                  : "text-red-500"
+                                  }`}
                               >
                                 {Object.values(individualAmounts)
                                   .reduce(
@@ -1484,11 +1562,11 @@ export default function ActivityFeed({
                                 className={
                                   Math.abs(
                                     parseFloat(amount || "0") -
-                                      Object.values(individualAmounts).reduce(
-                                        (sum, val) =>
-                                          sum + (parseFloat(val) || 0),
-                                        0,
-                                      ),
+                                    Object.values(individualAmounts).reduce(
+                                      (sum, val) =>
+                                        sum + (parseFloat(val) || 0),
+                                      0,
+                                    ),
                                   ) < 0.01
                                     ? "text-green-600 font-medium"
                                     : "text-red-500 font-bold"
@@ -1524,7 +1602,7 @@ export default function ActivityFeed({
                           <div className="relative h-20 w-20">
                             <button
                               type="button"
-                              onClick={() => setPreviewImage(imageBase64)}
+                              onClick={() => setPreviewImage({ url: imageBase64, title: "New Receipt Upload" })}
                               aria-label="Open selected receipt preview"
                               className="absolute inset-0 w-full h-full p-0 m-0"
                             >
@@ -1603,7 +1681,9 @@ function ExpenseCard({
   expense,
   currentUserId,
   isLeader,
-  formatCurrency,
+  formatAmount,
+  convertToBase,
+  baseCurrency,
   setPreviewImage,
   startEdit,
   handleDelete,
@@ -1613,8 +1693,10 @@ function ExpenseCard({
   expense: any;
   currentUserId: string;
   isLeader: boolean;
-  formatCurrency: (n: number) => string;
-  setPreviewImage: (s: string) => void;
+  formatAmount: (n: number, c?: string | null) => string;
+  convertToBase: (n: number, c?: string | null) => number;
+  baseCurrency: any;
+  setPreviewImage: (p: { url: string; title: string }) => void;
   startEdit: (e: any) => void;
   handleDelete: (id: string) => void;
   deleting: boolean;
@@ -1627,7 +1709,7 @@ function ExpenseCard({
 
   return (
     <motion.div
-      className="p-6 border border-gray-100 rounded-3xl shadow-sm bg-white"
+      className="p-6 border border-gray-300 rounded-3xl bg-white transition-shadow duration-300"
       initial={{ clipPath: "inset(0% 50% 0% 50%)", opacity: 0 }}
       whileInView={{ clipPath: "inset(0% 0% 0% 0%)", opacity: 1 }}
       viewport={{ once: true, margin: "-20px" }}
@@ -1636,62 +1718,94 @@ function ExpenseCard({
         ease: "easeOut",
       }}
     >
-      <div className="flex justify-between items-start">
-        <div>
-          <p className="font-semibold text-lg">{expense.description}</p>
-          <p className="text-sm text-gray-500">
-            Paid by {expense.payer.name} • $
-            {formatCurrency(expense.totalAmount)}
-          </p>
-          <p className="text-sm font-medium text-black mt-1">
-            Your share: ${formatCurrency(myShare)}
-            {mySplit && mySplit.deduction > 0 && (
-              <span className="text-xs text-gray-500 block">
-                (Deduction: ${formatCurrency(mySplit.deduction)} -{" "}
-                {mySplit.reason || "No reason provided"})
+      <div className="flex flex-col sm:flex-row justify-between items-start gap-5">
+        <div className="min-w-0 flex-1 w-full">
+          <p className="font-semibold text-lg break-words text-gray-900">{expense.description}</p>
+          <p className="text-sm text-gray-500 mt-1">
+            Paid by <span className="font-semibold text-gray-700">{expense.payer.name}</span> •{" "}
+            <span className="font-bold text-gray-950">{formatAmount(expense.totalAmount, expense.currency)}</span>
+            {expense.currency && baseCurrency && expense.currency !== baseCurrency.code && (
+              <span className="text-xs text-gray-400 ml-2 bg-gray-50 px-2 py-0.5 rounded-md border border-gray-100">
+                ~{formatAmount(convertToBase(expense.totalAmount, expense.currency))}
               </span>
             )}
           </p>
-          <p className="text-sm text-gray-500 mt-1">
-            <span className="font-medium">
-              Split with ({expense.splits.length}):{" "}
-            </span>
-            {expense.splits.map((s: any) => s.user.name).join(", ")}
-          </p>
-          <p className="text-xs text-gray-400 mt-1">
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3.5 bg-gray-50/50 border border-gray-100 p-4 rounded-2xl">
+            <div>
+              <span className="block text-[10px] uppercase tracking-wider font-bold text-blue-500/80">Your Share</span>
+              <span className="text-sm font-bold text-blue-600">{formatAmount(myShare, expense.currency)}</span>
+              {mySplit && mySplit.deduction > 0 && (
+                <span className="text-xs text-red-500 block mt-0.5">
+                  Deduction: {formatAmount(mySplit.deduction, expense.currency)} ({mySplit.reason || "No reason"})
+                </span>
+              )}
+            </div>
+            <div>
+              <span className="block text-[10px] uppercase tracking-wider font-bold text-gray-400">Split With</span>
+              <span className="text-xs text-gray-600 line-clamp-2" title={expense.splits.map((s: any) => s.user.name).join(", ")}>
+                {expense.splits.map((s: any) => s.user.name).join(", ")}
+              </span>
+            </div>
+          </div>
+
+          <p className="text-[10px] text-gray-400 mt-3 flex items-center gap-1.5">
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
             {new Date(parseInt(expense.createdAt)).toLocaleString()}
           </p>
-        </div>
-        {expense.hasImage && (
-          <div className="relative h-16 w-16">
-            <button
-              type="button"
-              onClick={() => setPreviewImage(`/api/image/${expense.id}`)}
-              className="absolute inset-0 w-full h-full p-0 m-0 cursor-pointer"
-              aria-label={`Open receipt for ${expense.description}`}
-            >
-              <Image
-                src={`/api/image/${expense.id}`}
-                alt="Receipt"
-                fill
-                sizes="64px"
-                className="rounded-xl cursor-pointer object-cover"
-              />
-            </button>
-          </div>
-        )}
 
+          {/* Improved Outside Image/Receipt Preview */}
+          {expense.hasImage && (
+            <div className="mt-4 pt-4 border-t border-gray-100/80">
+              <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-2">
+                <svg className="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+                Receipt Attachment
+              </div>
+              <div className="relative group w-44 aspect-[4/3] rounded-2xl overflow-hidden border border-gray-200/80 bg-gray-50 shadow-sm transition-all duration-300 hover:shadow-md hover:border-blue-200">
+                <button
+                  type="button"
+                  onClick={() => setPreviewImage({ url: `/api/image/${expense.id}`, title: expense.description })}
+                  className="absolute inset-0 w-full h-full p-0 m-0 cursor-pointer overflow-hidden rounded-2xl"
+                  aria-label={`Open receipt for ${expense.description}`}
+                >
+                  <Image
+                    src={`/api/image/${expense.id}`}
+                    alt={`Receipt for ${expense.description}`}
+                    fill
+                    sizes="176px"
+                    className="rounded-2xl cursor-pointer object-cover transition-transform duration-700 ease-out group-hover:scale-105"
+                  />
+                  {/* Glassmorphic hover overlay hint */}
+                  <div className="absolute inset-0 bg-black/35 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center backdrop-blur-[1px]">
+                    <span className="flex items-center gap-1.5 px-3 py-1.5 bg-white/90 backdrop-blur-md text-gray-800 text-[10px] font-bold uppercase tracking-wider rounded-full shadow-md scale-95 group-hover:scale-100 transition-all duration-300">
+                      <svg className="w-3.5 h-3.5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                      </svg>
+                      Preview
+                    </span>
+                  </div>
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Action column (aligned to right, or bottom on mobile) */}
         {canEdit && (
-          <div className="flex flex-col gap-2 ml-2">
+          <div className="flex sm:flex-col gap-2 flex-shrink-0 w-full sm:w-auto justify-end sm:justify-start mt-2 sm:mt-0 pt-2 sm:pt-0">
             <button
               onClick={() => startEdit(expense)}
-              className="px-3 py-1 bg-gray-100 rounded-full hover:bg-gray-200 text-sm transition-colors cursor-pointer"
+              className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold text-xs rounded-full transition-all cursor-pointer shadow-sm hover:shadow hover:scale-[1.02] active:scale-95"
             >
               Edit
             </button>
             <button
               onClick={() => handleDelete(expense.id)}
-              className="px-3 py-1 bg-red-50 text-red-600 rounded-full hover:bg-red-100 text-sm transition-colors cursor-pointer"
+              className="px-4 py-2 bg-red-50 hover:bg-red-100 text-red-600 font-semibold text-xs rounded-full transition-all cursor-pointer shadow-sm hover:shadow hover:scale-[1.02] active:scale-95"
               disabled={deleting}
             >
               Delete

@@ -1,5 +1,20 @@
 import mongoose, { Schema, Document, Model } from "mongoose";
 
+export interface ICurrencyConfig {
+  code: string;        // ISO 4217, e.g. "THB"
+  name: string;        // e.g. "Thai Baht"
+  symbol: string;      // e.g. "฿"
+  countryCode: string; // ISO 3166-1 alpha-2, e.g. "TH"
+  exchangeRate: number; // How many of this currency = 1 base currency unit
+}
+
+export interface IBaseCurrency {
+  code: string;
+  name: string;
+  symbol: string;
+  countryCode: string;
+}
+
 export interface IJourney extends Document {
   name: string;
   slug: string;
@@ -16,11 +31,35 @@ export interface IJourney extends Document {
   status: "active" | "complete";
   createdAt: Date;
   expireAt?: Date;
+  // Multi-currency support
+  baseCurrency?: IBaseCurrency;
+  currencies?: ICurrencyConfig[];
   // Single active join token metadata
   joinTokenJti?: string;
   joinTokenExpiresAt?: Date;
   joinTokenUsed?: boolean;
 }
+
+const CurrencyConfigSchema = new Schema(
+  {
+    code: { type: String, required: true },
+    name: { type: String, required: true },
+    symbol: { type: String, required: true },
+    countryCode: { type: String, required: true },
+    exchangeRate: { type: Number, required: true },
+  },
+  { _id: false }
+);
+
+const BaseCurrencySchema = new Schema(
+  {
+    code: { type: String, required: true },
+    name: { type: String, required: true },
+    symbol: { type: String, required: true },
+    countryCode: { type: String, required: true },
+  },
+  { _id: false }
+);
 
 const JourneySchema: Schema = new Schema(
   {
@@ -38,6 +77,9 @@ const JourneySchema: Schema = new Schema(
     isInputLocked: { type: Boolean, default: false },
     status: { type: String, enum: ["active", "complete"], default: "active" },
     expireAt: { type: Date },
+    // Multi-currency support
+    baseCurrency: { type: BaseCurrencySchema },
+    currencies: { type: [CurrencyConfigSchema], default: [] },
     // Token metadata - used for single-active token or revocation
     joinTokenJti: { type: String },
     joinTokenExpiresAt: { type: Date },

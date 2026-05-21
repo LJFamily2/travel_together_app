@@ -338,6 +338,34 @@ const journeyResolvers = {
 
       return await journey.populate(["leaderId", "members", "pendingMembers"]);
     },
+    updateJourneyCurrencies: async (
+      _: unknown,
+      {
+        journeyId,
+        baseCurrency,
+        currencies,
+      }: {
+        journeyId: string;
+        baseCurrency?: { code: string; name: string; symbol: string; countryCode: string };
+        currencies: { code: string; name: string; symbol: string; countryCode: string; exchangeRate: number }[];
+      },
+      context: GraphQLContext,
+    ) => {
+      await dbConnect();
+      const { journey } = await getJourneyWithLeaderCheck(
+        journeyId,
+        context,
+        "Only the leader can update currency settings",
+      );
+
+      if (baseCurrency) {
+        journey.baseCurrency = baseCurrency;
+      }
+      journey.currencies = currencies;
+      await journey.save();
+
+      return await journey.populate(["leaderId", "members", "pendingMembers"]);
+    },
     joinJourney: async (
       _: unknown,
       { journeyId, userId }: { journeyId: string; userId: string },

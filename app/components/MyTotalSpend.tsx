@@ -13,6 +13,7 @@ interface Split {
 interface Expense {
   id: string;
   totalAmount: number;
+  currency?: string | null;
   payer: {
     id: string;
   };
@@ -28,7 +29,7 @@ export default function MyTotalSpend({
   expenses,
   currentUserId,
 }: MyTotalSpendProps) {
-  const { formatCurrency } = useCurrency();
+  const { formatCurrency, convertToBase, baseCurrency } = useCurrency();
   let myTotalCost = 0;
   let myTotalPayments = 0;
 
@@ -37,25 +38,31 @@ export default function MyTotalSpend({
       (s) => s.baseAmount === 0 && (s.deduction || 0) > 0
     );
 
+    const baseAmount = convertToBase(expense.totalAmount, expense.currency);
+
     if (expense.payer.id === currentUserId) {
       if (isSettlement) {
-        myTotalPayments -= expense.totalAmount;
+        myTotalPayments -= baseAmount;
       } else {
-        myTotalPayments += expense.totalAmount;
+        myTotalPayments += baseAmount;
       }
     }
 
     const mySplit = expense.splits.find((s) => s.user.id === currentUserId);
     if (mySplit) {
-      myTotalCost += mySplit.baseAmount - (mySplit.deduction || 0);
+      const costInCurrency = mySplit.baseAmount - (mySplit.deduction || 0);
+      myTotalCost += convertToBase(costInCurrency, expense.currency);
     }
   });
 
   const netBalance = myTotalPayments - myTotalCost;
 
   return (
-    <div className="p-6 border border-gray-100 rounded-[34px] shadow-sm bg-white mb-6">
-      <h3 className="text-lg font-bold mb-4 text-gray-800">My Financials</h3>
+    <div className="p-6 border border-gray-100 rounded-[34px] shadow-sm bg-white">
+      <h3 className="text-lg font-bold mb-1 text-gray-800">My Financials</h3>
+      <p className="text-xs text-gray-500 mb-4 font-medium">
+        All figures are displayed in base currency ({baseCurrency?.code || "VND"})
+      </p>
 
       <div className="space-y-3">
         {/* Total Paid */}
@@ -68,7 +75,7 @@ export default function MyTotalSpend({
           </div>
           <div className="max-w-full overflow-x-auto pb-1 scrollbar-hide">
             <span className="font-mono text-lg font-semibold text-gray-900 whitespace-nowrap">
-              ${formatCurrency(myTotalPayments)}
+              {formatCurrency(myTotalPayments)}
             </span>
           </div>
         </div>
@@ -83,7 +90,7 @@ export default function MyTotalSpend({
           </div>
           <div className="max-w-full overflow-x-auto pb-1 scrollbar-hide">
             <span className="font-mono text-lg font-semibold text-gray-900 whitespace-nowrap">
-              ${formatCurrency(myTotalCost)}
+              {formatCurrency(myTotalCost)}
             </span>
           </div>
         </div>
@@ -125,8 +132,8 @@ export default function MyTotalSpend({
                   netBalance >= 0 ? "text-green-600" : "text-red-600"
                 }`}
               >
-                {netBalance >= 0 ? "+" : ""}
-                {formatCurrency(netBalance)}
+                {netBalance >= 0 ? "+" : "-"}
+                {formatCurrency(Math.abs(netBalance))}
               </span>
             </div>
           </div>

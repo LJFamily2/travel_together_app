@@ -18,8 +18,9 @@ import PendingRequestsModal from "../../components/PendingRequestsModal";
 import MembersModal from "../../components/MembersModal";
 import UserSettingsModal from "../../components/UserSettingsModal";
 import TailwindDateRangePicker from "../../components/TailwindDateRangePicker";
+import CurrencyFlag from "../../components/CurrencyFlag";
 import { updateJourneyMembers } from "../../../lib/apolloCache";
-import { CurrencyProvider } from "../../context/CurrencyContext";
+import { CurrencyProvider, useCurrency, JourneyCurrencyConfig, JourneyBaseCurrency } from "../../context/CurrencyContext";
 import Cookies from "js-cookie";
 
 const GENERATE_JOIN_TOKEN = gql`
@@ -66,6 +67,19 @@ const GET_DASHBOARD_DATA = gql`
       requireApproval
       isLocked
       isInputLocked
+      baseCurrency {
+        code
+        name
+        symbol
+        countryCode
+      }
+      currencies {
+        code
+        name
+        symbol
+        countryCode
+        exchangeRate
+      }
       pendingMembers {
         id
         name
@@ -80,6 +94,7 @@ const GET_DASHBOARD_DATA = gql`
         id
         description
         totalAmount
+        currency
         payer {
           id
           name
@@ -109,6 +124,7 @@ const GET_DASHBOARD_DATA = gql`
       id
       description
       totalAmount
+      currency
       payer {
         id
         name
@@ -136,6 +152,7 @@ interface Expense {
   id: string;
   description: string;
   totalAmount: number;
+  currency?: string | null;
   payer: {
     id: string;
     name: string;
@@ -177,6 +194,8 @@ interface DashboardData {
     requireApproval: boolean;
     isLocked: boolean;
     isInputLocked: boolean;
+    baseCurrency?: JourneyBaseCurrency | null;
+    currencies?: JourneyCurrencyConfig[];
     pendingMembers: {
       id: string;
       name: string;
@@ -260,6 +279,7 @@ export default function JourneyDashboard() {
   const [isMembersModalOpen, setIsMembersModalOpen] = useState(false);
   const [isUserSettingsOpen, setIsUserSettingsOpen] = useState(false);
   const [isSettleModalOpen, setIsSettleModalOpen] = useState(false);
+  const [isAddExpenseOpen, setIsAddExpenseOpen] = useState(false);
   const [isEndingSoon, setIsEndingSoon] = useState(false);
   const [isLeaving, setIsLeaving] = useState(false);
   const [showQr, setShowQr] = useState(false);
@@ -367,17 +387,18 @@ export default function JourneyDashboard() {
       } catch (e) {
         try {
           (cache as any).refetchQueries({ include: "active" });
-        } catch (_) {}
+        } catch (_) { }
       }
     },
   });
 
   const journey = data?.getJourneyDetails;
   const journeyId = journey?.id;
-
   const currentUser = data?.me;
   const isLeader = journey?.leader?.id === currentUser?.id;
   const allExpenses = data?.allExpenses || [];
+  const baseCurrency = journey?.baseCurrency ?? null;
+  const journeyCurrencies = journey?.currencies ?? [];
 
   const isInputLocked =
     journey?.isInputLocked ||
@@ -596,7 +617,7 @@ export default function JourneyDashboard() {
         } catch (cacheErr) {
           try {
             await refetch();
-          } catch {}
+          } catch { }
         }
       }
       toast.success("Member removed successfully");
@@ -679,8 +700,23 @@ export default function JourneyDashboard() {
     }
   };
 
+  // Inner component that can access CurrencyContext (since JourneyDashboard wraps CurrencyProvider,
+  // it cannot call useCurrency() itself — we use a child bridge instead)
+  function CurrencySyncer() {
+    const { setJourneyCurrencyData } = useCurrency();
+    useEffect(() => {
+      setJourneyCurrencyData(
+        baseCurrency ?? null,
+        (journeyCurrencies as JourneyCurrencyConfig[]) ?? []
+      );
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [baseCurrency, journeyCurrencies]);
+    return null;
+  }
+
   return (
     <CurrencyProvider>
+      <CurrencySyncer />
       <div className="min-h-screen bg-(--color-background) text-(--color-foreground) font-sans flex flex-col">
         <main className="grow w-full max-w-[1440px] mx-auto p-4 md:p-8">
           <div className="bg-white rounded-[34px] p-6 md:p-10 shadow-sm min-h-[80vh]">
@@ -697,14 +733,14 @@ export default function JourneyDashboard() {
                         <span className="text-sm text-gray-500">
                           {journey.startDate
                             ? new Date(
-                                parseInt(journey.startDate),
-                              ).toLocaleDateString()
+                              parseInt(journey.startDate),
+                            ).toLocaleDateString()
                             : "?"}
                           {" — "}
                           {journey.endDate
                             ? new Date(
-                                parseInt(journey.endDate),
-                              ).toLocaleDateString()
+                              parseInt(journey.endDate),
+                            ).toLocaleDateString()
                             : "?"}
                         </span>
                       )}
@@ -769,18 +805,17 @@ export default function JourneyDashboard() {
                       onClick={
                         journey.isLocked
                           ? (e) => {
-                              e.preventDefault();
-                              toast.error(
-                                "Journey is locked. Unlock to invite new members.",
-                              );
-                            }
+                            e.preventDefault();
+                            toast.error(
+                              "Journey is locked. Unlock to invite new members.",
+                            );
+                          }
                           : handleShowQr
                       }
-                      className={`${
-                        journey.isLocked
-                          ? "bg-gray-200 text-gray-500 cursor-not-allowed"
-                          : "bg-blue-100 text-blue-600 hover:bg-blue-200"
-                      } px-3 py-1 rounded-full text-sm transition-colors flex items-center gap-1 cursor-pointer`}
+                      className={`${journey.isLocked
+                        ? "bg-gray-200 text-gray-500 cursor-not-allowed"
+                        : "bg-blue-100 text-blue-600 hover:bg-blue-200"
+                        } px-3 py-1 rounded-full text-sm transition-colors flex items-center gap-1 cursor-pointer`}
                       title={
                         journey.isLocked
                           ? "Journey is locked. No new members can join."
@@ -938,6 +973,48 @@ export default function JourneyDashboard() {
               </div>
             </header>
 
+            {/* Exchange rate info strip */}
+            {baseCurrency && journeyCurrencies.length > 0 && (
+              <div className="bg-gray-50 border border-gray-100 rounded-2xl mb-6 text-sm">
+                <div className="hidden sm:flex flex-wrap items-center gap-4 px-4 py-3">
+                  <span className="font-semibold text-gray-700 flex items-center gap-1.5">
+                    <CurrencyFlag countryCode={baseCurrency.countryCode} size="sm" />
+                    Base: {baseCurrency.code}
+                  </span>
+                  <div className="w-px h-4 bg-gray-300"></div>
+                  <div className="flex flex-wrap gap-x-4 gap-y-2 text-gray-600">
+                    {journeyCurrencies.map(c => (
+                      <span key={c.code} className="flex items-center gap-1.5" title={c.name}>
+                        <CurrencyFlag countryCode={c.countryCode} size="sm" />
+                        1 {baseCurrency.code} = {c.exchangeRate} {c.code}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Mobile Accordion View */}
+                <details className="sm:hidden group">
+                  <summary className="flex items-center justify-between px-4 py-3 font-semibold text-gray-700 cursor-pointer list-none [&::-webkit-details-marker]:hidden">
+                    <span className="flex items-center gap-1.5">
+                      <CurrencyFlag countryCode={baseCurrency.countryCode} size="sm" />
+                      Base: {baseCurrency.code}
+                    </span>
+                    <svg className="w-4 h-4 text-gray-500 transition-transform group-open:rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </summary>
+                  <div className="px-4 pb-3 flex flex-col gap-y-2 text-gray-600 border-t border-gray-100 pt-3">
+                    {journeyCurrencies.map(c => (
+                      <span key={c.code} className="flex items-center gap-1.5" title={c.name}>
+                        <CurrencyFlag countryCode={c.countryCode} size="sm" />
+                        1 {baseCurrency.code} = {c.exchangeRate} {c.code}
+                      </span>
+                    ))}
+                  </div>
+                </details>
+              </div>
+            )}
+
             {journey.expireAt && isEndingSoon && (
               <div className="bg-red-50 border border-red-100 text-red-700 p-4 mb-8 rounded-2xl flex items-start gap-4">
                 <div className="p-2 bg-red-100 rounded-full">
@@ -963,7 +1040,7 @@ export default function JourneyDashboard() {
               </div>
             )}
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
               {/* Left Column: Stats & Actions */}
               <div className="lg:col-span-1 space-y-6">
                 <MyTotalSpend
@@ -971,17 +1048,42 @@ export default function JourneyDashboard() {
                   currentUserId={currentUser.id}
                 />
 
-                <AddExpenseForm
-                  journeyId={journey.id}
-                  currentUser={currentUser}
-                  members={journey.members}
-                  isLocked={isInputLocked}
-                  onExpenseAdded={() => refetch()}
-                />
+                <div className="hidden lg:block">
+                  <AddExpenseForm
+                    journeyId={journey.id}
+                    currentUser={currentUser}
+                    members={journey.members}
+                    isLocked={isInputLocked}
+                    onExpenseAdded={() => refetch()}
+                  />
+                </div>
               </div>
 
               {/* Right Column: Feed */}
               <div className="lg:col-span-2">
+                <hr className="lg:hidden border-gray-100 mb-6" />
+                <button
+                  onClick={() => {
+                    setTimeout(() => setIsAddExpenseOpen(true), 200);
+                  }}
+                  className="lg:hidden w-full mb-6 bg-black text-white py-3.5 px-4 rounded-2xl font-semibold hover:bg-gray-900 active:scale-90 transition-all duration-200 ease-out shadow-md cursor-pointer flex items-center justify-center gap-2"
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    strokeWidth={2.5}
+                    stroke="currentColor"
+                    className="w-5 h-5"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M12 4.5v15m7.5-7.5h-15"
+                    />
+                  </svg>
+                  Add Expense
+                </button>
                 <ActivityFeed
                   journeyId={journeyId}
                   journeyName={journey.name}
@@ -1078,9 +1180,8 @@ export default function JourneyDashboard() {
                   sizes="250px"
                 />
                 <StyledQRCode
-                  value={`${
-                    typeof window !== "undefined" ? window.location.origin : ""
-                  }/join?token=${joinToken}`}
+                  value={`${typeof window !== "undefined" ? window.location.origin : ""
+                    }/join?token=${joinToken}`}
                   size={220}
                   className="rounded-lg bg-white p-3 shadow-sm"
                 />
@@ -1111,9 +1212,61 @@ export default function JourneyDashboard() {
             </div>
           </div>
         )}
+        {isAddExpenseOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div
+              className="fixed inset-0 bg-black/60 backdrop-blur-sm transition-opacity cursor-pointer animate-fade-in-overlay"
+              onClick={() => setIsAddExpenseOpen(false)}
+            ></div>
+            <div
+              className="relative w-full max-w-lg max-h-[90vh] overflow-y-auto bg-white rounded-[34px] shadow-2xl z-10 animate-popup-bouncy custom-scrollbar"
+            >
+              <AddExpenseForm
+                journeyId={journey.id}
+                currentUser={currentUser}
+                members={journey.members}
+                isLocked={isInputLocked}
+                onExpenseAdded={() => {
+                  refetch();
+                  setIsAddExpenseOpen(false);
+                }}
+                onClose={() => setIsAddExpenseOpen(false)}
+              />
+            </div>
+          </div>
+        )}
+
         <UserSettingsModal
           isOpen={isUserSettingsOpen}
           onClose={() => setIsUserSettingsOpen(false)}
+          journeyId={journey.id}
+          isLeader={isLeader}
+          initialBaseCurrency={baseCurrency}
+          initialCurrencies={journeyCurrencies}
+          onCurrenciesUpdated={(base, currencies) => {
+            try {
+              const existing = client.readQuery<DashboardData>({
+                query: GET_DASHBOARD_DATA,
+                variables: { slug },
+              });
+              if (existing) {
+                client.writeQuery({
+                  query: GET_DASHBOARD_DATA,
+                  variables: { slug },
+                  data: {
+                    ...existing,
+                    getJourneyDetails: {
+                      ...existing.getJourneyDetails,
+                      baseCurrency: base,
+                      currencies: currencies,
+                    },
+                  },
+                });
+              }
+            } catch (e) {
+              refetch();
+            }
+          }}
         />
       </div>
     </CurrencyProvider>

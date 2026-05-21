@@ -54,6 +54,7 @@ const expenseResolvers = {
         description,
         splits,
         imageBase64,
+        currency,
       }: {
         journeyId: string;
         payerId: string;
@@ -61,6 +62,7 @@ const expenseResolvers = {
         description: string;
         splits: SplitInput[];
         imageBase64?: string;
+        currency?: string;
       },
     ) => {
       await dbConnect();
@@ -101,6 +103,7 @@ const expenseResolvers = {
         totalAmount,
         description,
         imageBinary: imageBuffer,
+        currency: currency || null,
         splits: splits.map((s) => ({
           userId: new mongoose.Types.ObjectId(s.userId),
           baseAmount: s.baseAmount,
@@ -139,6 +142,7 @@ const expenseResolvers = {
         description,
         splits,
         imageBase64,
+        currency,
       }: {
         expenseId: string;
         payerId?: string;
@@ -146,6 +150,7 @@ const expenseResolvers = {
         description?: string;
         splits?: SplitInput[];
         imageBase64?: string;
+        currency?: string;
       },
       context: { user?: { userId?: string } },
     ) => {
@@ -182,6 +187,7 @@ const expenseResolvers = {
 
       if (payerId) expense.payerId = new mongoose.Types.ObjectId(payerId);
       if (description) expense.description = description;
+      if (currency !== undefined) expense.currency = currency || undefined;
 
       if (imageBase64) {
         const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, "");
@@ -326,6 +332,7 @@ const expenseResolvers = {
   },
   Expense: {
     payer: (parent: IExpense) => parent.payerId,
+    currency: (parent: IExpense) => parent.currency || null,
     hasImage: (parent: ExpenseWithHasImage) => {
       if (parent.hasImage !== undefined) return parent.hasImage;
       return !!parent.imageBinary;
