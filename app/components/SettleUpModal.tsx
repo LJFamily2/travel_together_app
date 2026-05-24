@@ -72,6 +72,7 @@ interface Expense {
   };
   splits: Split[];
   createdAt?: string;
+  currency?: string | null;
 }
 
 interface SettleUpModalProps {
@@ -91,7 +92,7 @@ export default function SettleUpModal({
   isOpen,
   onClose,
 }: SettleUpModalProps) {
-  const { formatCurrency } = useCurrency();
+  const { formatCurrency, formatAmount, convertToBase } = useCurrency();
   const [recipientId, setRecipientId] = useState("");
   const [isRecipientDropdownOpen, setIsRecipientDropdownOpen] = useState(false);
   const [recipientSearchQuery, setRecipientSearchQuery] = useState("");
@@ -197,6 +198,7 @@ export default function SettleUpModal({
       expenseId: string;
       payerId: string;
       splitUserId: string;
+      currency?: string | null;
     }[]
   > = {};
 
@@ -226,6 +228,7 @@ export default function SettleUpModal({
               expenseId,
               payerId,
               splitUserId: split.user.id,
+              currency: expense.currency,
             });
           }
         });
@@ -251,6 +254,7 @@ export default function SettleUpModal({
             expenseId,
             payerId,
             splitUserId: mySplit.user.id,
+            currency: expense.currency,
           });
         }
       }
@@ -260,8 +264,9 @@ export default function SettleUpModal({
       // I paid, others owe me
       expense.splits.forEach((split) => {
         if (split.user.id !== currentUser.id) {
-          const amount = split.baseAmount - (split.deduction || 0);
-          balances[split.user.id] = (balances[split.user.id] || 0) + amount;
+          const amountInExpenseCurrency = split.baseAmount - (split.deduction || 0);
+          const amountInBaseCurrency = convertToBase(amountInExpenseCurrency, expense.currency);
+          balances[split.user.id] = (balances[split.user.id] || 0) + amountInBaseCurrency;
         }
       });
     } else {
@@ -269,8 +274,9 @@ export default function SettleUpModal({
       const mySplit = expense.splits.find((s) => s.user.id === currentUser.id);
       if (mySplit) {
         // I owe the payer
-        const amount = mySplit.baseAmount - (mySplit.deduction || 0);
-        balances[payerId] = (balances[payerId] || 0) - amount;
+        const amountInExpenseCurrency = mySplit.baseAmount - (mySplit.deduction || 0);
+        const amountInBaseCurrency = convertToBase(amountInExpenseCurrency, expense.currency);
+        balances[payerId] = (balances[payerId] || 0) - amountInBaseCurrency;
       }
     }
   });
@@ -394,8 +400,8 @@ export default function SettleUpModal({
                             : "text-red-600 font-medium"
                         }
                       >
-                        {isOwed ? "owes you" : "you owe"} $
-                        {formatCurrency(Math.abs(balance))}
+                        {isOwed ? "owes you" : "you owe"}{" "}
+                        {formatAmount(Math.abs(balance))}
                       </span>
                     </div>
 
@@ -539,7 +545,7 @@ export default function SettleUpModal({
 
                             <div className="flex items-center gap-2 flex-none mt-2 sm:mt-0">
                               <span className="font-mono whitespace-nowrap">
-                                -${formatCurrency(d.amount)}
+                                -{formatAmount(d.amount, d.currency)}
                               </span>
 
                               {d.payerId === currentUser.id && (
@@ -645,7 +651,7 @@ export default function SettleUpModal({
                   (() => {
                     const selectedMember = members.find((m) => m.id === recipientId);
                     return selectedMember 
-                      ? `${selectedMember.name} (Owes: $${formatCurrency(balances[selectedMember.id] || 0)})` 
+                      ? `${selectedMember.name} (Owes: ${formatAmount(balances[selectedMember.id] || 0)})` 
                       : "Select a member";
                   })()
                 )}
@@ -715,7 +721,7 @@ export default function SettleUpModal({
                             setRecipientSearchQuery("");
                           }}
                         >
-                          {m.name} (Owes: ${formatCurrency(balances[m.id] || 0)})
+                          {m.name} (Owes: {formatAmount(balances[m.id] || 0)})
                         </button>
                       ))}
                     {members
