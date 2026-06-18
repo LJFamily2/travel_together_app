@@ -455,6 +455,45 @@ export default function JourneyDashboard() {
     ) {
       return null;
     }
+    // If user is logged in but not a member of the journey, display Access Denied
+    if (
+      (error as Error).message &&
+      (error as Error).message.includes("Unauthorized")
+    ) {
+      return (
+        <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 p-4">
+          <div className="bg-white p-8 rounded-3xl shadow-xl text-center max-w-md w-full">
+            <div className="w-16 h-16 bg-red-100 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4">
+              <svg
+                className="w-8 h-8"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"
+                />
+              </svg>
+            </div>
+            <h2 className="text-2xl font-bold text-gray-900 mb-2">
+              Access Denied
+            </h2>
+            <p className="text-gray-500 mb-8">
+              You are not a member of this journey.
+            </p>
+            <button
+              onClick={() => router.push("/")}
+              className="w-full bg-gray-900 text-white py-3 rounded-xl font-semibold hover:bg-gray-800 transition-colors cursor-pointer"
+            >
+              Go Home
+            </button>
+          </div>
+        </div>
+      );
+    }
     return (
       <div className="p-8 text-red-500">Error: {(error as Error).message}</div>
     );

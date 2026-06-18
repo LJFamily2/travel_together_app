@@ -116,7 +116,7 @@ const userResolvers = {
       context: GraphQLContext
     ) => {
       await dbConnect();
-      if (!context.user?.userId) throw new Error("Unauthorized");
+      if (!context.user?.userId) throw new Error("Unauthenticated");
 
       // Rate limit guest creation by leader user id to avoid mass guest creation
       try {
@@ -182,7 +182,7 @@ const userResolvers = {
       context: GraphQLContext
     ) => {
       await dbConnect();
-      if (!context.user?.userId) throw new Error("Unauthorized");
+      if (!context.user?.userId) throw new Error("Unauthenticated");
 
       const requesterId = context.user.userId;
       const journey = await Journey.findById(journeyId);

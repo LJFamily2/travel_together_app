@@ -36,14 +36,14 @@ const apiHandler = startServerAndCreateNextHandler<NextRequest, Context>(
       const token =
         req.headers.get("authorization")?.replace("Bearer ", "") || "";
       let user = null;
-      if (token) {
+      if (token && token !== "undefined" && token !== "null") {
         try {
           if (!process.env.JWT_SECRET) {
             throw new Error("JWT_SECRET is not defined");
           }
           user = jwt.verify(token, process.env.JWT_SECRET);
-        } catch (e) {
-          console.error("Invalid token");
+        } catch (e: any) {
+          console.error(`Token verification failed: ${e?.message || e}`);
         }
       }
 

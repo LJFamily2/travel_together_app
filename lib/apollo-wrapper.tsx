@@ -36,6 +36,17 @@ const httpLink = new HttpLink({
             "Rate limit exceeded — please wait a moment and try again."
           );
         }
+        if (
+          err.message === "Unauthenticated" ||
+          /Unauthenticated/i.test(err.message) ||
+          /Invalid.*token/i.test(err.message) ||
+          /Expired.*token/i.test(err.message)
+        ) {
+          Cookies.remove("guestToken");
+          if (typeof window !== "undefined") {
+            window.location.href = "/";
+          }
+        }
       });
     }
 

@@ -117,7 +117,7 @@ const journeyResolvers = {
 
       // Check authorization
       if (!userId) {
-        throw new Error("Unauthorized");
+        throw new Error("Unauthenticated");
       }
 
       const isLeader =
@@ -154,7 +154,7 @@ const journeyResolvers = {
       if (!journey) throw new Error("Journey not found");
 
       if (!userId) {
-        throw new Error("Unauthorized");
+        throw new Error("Unauthenticated");
       }
 
       const isLeader =
@@ -176,7 +176,7 @@ const journeyResolvers = {
     ) => {
       await dbConnect();
       const userId = context?.user?.userId;
-      if (!userId) throw new Error("Unauthorized");
+      if (!userId) throw new Error("Unauthenticated");
       const journeys = await Journey.find({ members: userId }).populate([
         "leaderId",
         "members",
@@ -190,7 +190,7 @@ const journeyResolvers = {
     ) => {
       await dbConnect();
       const userId = context?.user?.userId;
-      if (!userId) throw new Error("Unauthorized");
+      if (!userId) throw new Error("Unauthenticated");
 
       const journey = await Journey.findById(journeyId);
       if (!journey) throw new Error("Journey not found");
@@ -401,7 +401,7 @@ const journeyResolvers = {
     ) => {
       await dbConnect();
       const userId = context?.user?.userId;
-      if (!userId) throw new Error("Unauthorized");
+      if (!userId) throw new Error("Unauthenticated");
 
       const journey = await Journey.findById(journeyId);
       if (!journey) throw new Error("Journey not found");
@@ -810,7 +810,7 @@ const journeyResolvers = {
     ) => {
       await dbConnect();
       const userId = context?.user?.userId;
-      if (!userId) throw new Error("Unauthorized");
+      if (!userId) throw new Error("Unauthenticated");
 
       const journey = await Journey.findById(journeyId);
       if (!journey) throw new Error("Journey not found");
@@ -845,7 +845,7 @@ const journeyResolvers = {
     ) => {
       await dbConnect();
       const userId = context?.user?.userId;
-      if (!userId) throw new Error("Unauthorized");
+      if (!userId) throw new Error("Unauthenticated");
 
       const journey = await Journey.findById(journeyId);
       if (!journey) throw new Error("Journey not found");
