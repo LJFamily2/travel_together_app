@@ -4,6 +4,7 @@ import { useState } from "react";
 import { gql } from "@apollo/client";
 import { useMutation } from "@apollo/client/react";
 import toast from "react-hot-toast";
+import Cookies from "js-cookie";
 import { useCurrency } from "../context/CurrencyContext";
 import { useVoiceRecorder } from "../../lib/voice/useVoiceRecorder";
 import type {
@@ -145,14 +146,32 @@ export default function VoiceExpenseModal({
     setStep("transcribing");
     setApiError(null);
     try {
+      const authToken = Cookies.get("guestToken");
+      const authHeaders: HeadersInit = {
+        "Content-Type": "application/json",
+        ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+      };
+
       const transcribeRes = await fetch("/api/voice/transcribe", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: authHeaders,
         body: JSON.stringify({ audioBase64, format }),
       });
       const transcribeData = (await transcribeRes.json()) as
         | TranscribeResponse
         | VoiceApiError;
+
+      if (transcribeRes.status === 401) {
+        setApiError("Your session has expired. Please sign in again.");
+        setStep("record");
+        return;
+      }
+
+      if (transcribeRes.status === 429) {
+        setApiError("Too many requests. Please wait a moment and try again.");
+        setStep("record");
+        return;
+      }
 
       if (!transcribeRes.ok || !("transcript" in transcribeData)) {
         setApiError(
@@ -168,7 +187,7 @@ export default function VoiceExpenseModal({
 
       const parseRes = await fetch("/api/voice/parse-expenses", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: authHeaders,
         body: JSON.stringify({
           transcript: transcribeData.transcript,
           members: uniqueMembers,
@@ -177,6 +196,19 @@ export default function VoiceExpenseModal({
           currentUserId: currentUser.id,
         }),
       });
+
+      if (parseRes.status === 401) {
+        setApiError("Your session has expired. Please sign in again.");
+        setStep("record");
+        return;
+      }
+
+      if (parseRes.status === 429) {
+        setApiError("Too many requests. Please wait a moment and try again.");
+        setStep("record");
+        return;
+      }
+
       const parseData = (await parseRes.json()) as
         | ParseExpensesResponse
         | VoiceApiError;
@@ -297,8 +329,28 @@ export default function VoiceExpenseModal({
         <button
           type="button"
           onClick={() => setOpenReasonId(isOpen ? null : badgeId)}
-          title={flag.reason || "P
-return (
+          title={flag.reason || "Please double-check this"}
+          className="inline-flex items-center gap-1 text-xs font-medium text-orange-600 bg-orange-50 border border-orange-200 rounded-full px-2 py-0.5 cursor-pointer"
+        >
+          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z"/>
+          </svg>
+          Check this
+        </button>
+        {isOpen && flag.reason && (
+          <span className="absolute z-10 top-full left-0 mt-1 w-56 text-xs font-normal text-gray-700 bg-white border border-gray-200 rounded-lg shadow-lg p-2">
+            {flag.reason}
+          </span>
+        )}
+      </span>
+    );
+  };
+
+  return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-0 sm:p-4">
       <div className="bg-white w-full sm:max-w-lg sm:rounded-[34px] rounded-t-[34px] shadow-xl max-h-[90vh] flex flex-col">
         <div className="flex justify-between items-center p-6 pb-4 border-b border-gray-100">
@@ -630,4 +682,4 @@ return (
       </div>
     </div>
   );
-          }
+}
