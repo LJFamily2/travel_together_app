@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { chatJSON, OpenRouterError } from "../../../../lib/voice/openrouter";
+import { requireAuthAndRateLimit } from "../../../../lib/voice/auth";
 import {
   buildSystemPrompt,
   buildUserPrompt,
@@ -17,6 +18,12 @@ import type {
 export const runtime = "nodejs";
 
 const MAX_TRANSCRIPT_LENGTH = 4000;
+// Bounds how large the members/currencies arrays can be. These come straight
+// from the client's journey data, so without a cap a malicious caller could
+// pad them arbitrarily to inflate the prompt sent to the (paid) LLM call.
+// A real journey has at most a handful of members/currencies in practice.
+const MAX_MEMBERS = 100;
+const MAX_CURRENCIES = 20;
 
 function isValidMember(m: unknown): m is VoiceMemberContext {
   return (
@@ -39,6 +46,9 @@ function isValidCurrency(c: unknown): c is VoiceCurrencyContext {
 }
 
 export async function POST(req: NextRequest) {
+  const authResult = await requireAuthAndRateLimit(req);
+  if (authResult instanceof NextResponse) return authResult;
+
   let body: Partial<ParseExpensesRequest>;
   try {
     body = await req.json();
@@ -73,6 +83,13 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  if (members.length > MAX_MEMBERS) {
+    return NextResponse.json<VoiceApiError>(
+      { error: "Members list too large" },
+      { status: 413 },
+    );
+  }
+
   if (
     !Array.isArray(currencies) ||
     currencies.length === 0 ||
@@ -81,6 +98,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json<VoiceApiError>(
       { error: "Missing or invalid currencies list" },
       { status: 400 },
+    );
+  }
+
+  if (currencies.length > MAX_CURRENCIES) {
+    return NextResponse.json<VoiceApiError>(
+      { error: "Currencies list too large" },
+      { status: 413 },
     );
   }
 
@@ -141,4 +165,4 @@ export async function POST(req: NextRequest) {
       { status: status >= 400 && status < 600 ? status : 500 },
     );
   }
-      }
+}
