@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { transcribeAudio, OpenRouterError } from "../../../../lib/voice/openrouter";
+import { requireAuthAndRateLimit } from "../../../../lib/voice/auth";
 import type {
   TranscribeResponse,
   VoiceApiError,
@@ -18,6 +19,9 @@ interface TranscribeRequestBody {
 }
 
 export async function POST(req: NextRequest) {
+  const authResult = await requireAuthAndRateLimit(req);
+  if (authResult instanceof NextResponse) return authResult;
+
   let body: TranscribeRequestBody;
   try {
     body = await req.json();
