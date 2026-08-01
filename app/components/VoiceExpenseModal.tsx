@@ -298,3 +298,336 @@ export default function VoiceExpenseModal({
           type="button"
           onClick={() => setOpenReasonId(isOpen ? null : badgeId)}
           title={flag.reason || "P
+return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-0 sm:p-4">
+      <div className="bg-white w-full sm:max-w-lg sm:rounded-[34px] rounded-t-[34px] shadow-xl max-h-[90vh] flex flex-col">
+        <div className="flex justify-between items-center p-6 pb-4 border-b border-gray-100">
+          <h3 className="text-lg font-bold">Add Expense by Voice</h3>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            className="text-gray-400 hover:text-gray-600 p-2 rounded-full hover:bg-gray-100 transition-colors cursor-pointer"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <div className="overflow-y-auto p-6 flex-1">
+          {step === "record" && (
+            <div className="flex flex-col items-center text-center gap-4 py-6">
+              <p className="text-sm text-gray-600">
+                Hold the button and speak, e.g.{" "}
+                <span className="italic">&quot;Ăn tối, 590 baht, Hậu trả&quot;</span> or{" "}
+                <span className="italic">&quot;Dinner, 590 baht, Hau paid&quot;</span>.
+              </p>
+              <p className="text-xs text-gray-400">
+                Adding more than one? Say{" "}
+                <span className="font-medium">&quot;tiếp theo&quot;</span>,{" "}
+                <span className="font-medium">&quot;next&quot;</span>, or{" "}
+                <span className="font-medium">&quot;cái nữa&quot;</span> between expenses.
+              </p>
+
+              <button
+                type="button"
+                onMouseDown={handlePressStart}
+                onMouseUp={handlePressEnd}
+                onMouseLeave={() => {
+                  if (recorder.status === "recording") handlePressEnd();
+                }}
+                onTouchStart={(e) => {
+                  e.preventDefault();
+                  handlePressStart();
+                }}
+                onTouchEnd={(e) => {
+                  e.preventDefault();
+                  handlePressEnd();
+                }}
+                disabled={recorder.status === "requesting-permission"}
+                aria-pressed={recorder.status === "recording"}
+                className={`select-none cursor-pointer w-24 h-24 rounded-full flex items-center justify-center shadow-lg transition-all ${
+                  recorder.status === "recording"
+                    ? "bg-red-500 scale-110 animate-pulse"
+                    : "bg-black hover:opacity-90"
+                }`}
+              >
+                <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M12 18.75a6 6 0 006-6v-1.5m-6 7.5a6 6 0 01-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 01-3-3V4.5a3 3 0 116 0v8.25a3 3 0 01-3 3z"
+                  />
+                </svg>
+              </button>
+
+              <p className="text-sm font-medium text-gray-700 h-5">
+                {recorder.status === "recording"
+                  ? `Recording... ${recorder.elapsedSeconds.toFixed(1)}s (release to send)`
+                  : recorder.status === "requesting-permission"
+                  ? "Requesting microphone access..."
+                  : "Hold to talk"}
+              </p>
+
+              {(recorder.errorMessage || apiError) && (
+                <p className="text-sm text-red-500 max-w-sm">
+                  {recorder.errorMessage || apiError}
+                </p>
+              )}
+            </div>
+          )}
+
+          {(step === "transcribing" || step === "parsing") && (
+            <div className="flex flex-col items-center text-center gap-3 py-10">
+              <div className="w-8 h-8 border-2 border-gray-300 border-t-black rounded-full animate-spin" />
+              <p className="text-sm text-gray-600">
+                {step === "transcribing"
+                  ? "Listening to your recording..."
+                  : "Figuring out the expense details..."}
+              </p>
+              {transcript && step === "parsing" && (
+                <p className="text-xs text-gray-400 italic max-w-sm">
+                  &quot;{transcript}&quot;
+                </p>
+              )}
+            </div>
+          )}
+
+          {step === "review" && (
+            <div className="space-y-4">
+              {transcript && (
+                <p className="text-xs text-gray-400 italic border-l-2 border-gray-200 pl-2">
+                  &quot;{transcript}&quot;
+                </p>
+              )}
+
+              {draftExpenses.map((draft) => {
+                const payer =
+                  uniqueMembers.find((m) => m.id === draft.payerId) || null;
+                const participantIds =
+                  draft.splitType === "equal"
+                    ? draft.splitMemberIds && draft.splitMemberIds.length > 0
+                      ? draft.splitMemberIds
+                      : uniqueMembers.map((m) => m.id)
+                    : (draft.customSplits || []).map((s) => s.userId);
+
+                return (
+                  <div
+                    key={draft.draftId}
+                    className="border border-gray-100 rounded-2xl p-4 bg-gray-50 space-y-3"
+                  >
+                    <div className="flex justify-between items-start gap-2">
+                      <div className="flex-1 space-y-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="text"
+                            value={draft.description}
+                            onChange={(e) =>
+                              updateDraft(draft.draftId, {
+                                description: e.target.value,
+                              })
+                            }
+                            className="font-semibold text-sm bg-transparent border-b border-transparent focus:border-gray-300 outline-none w-full min-w-0"
+                          />
+                          <div className="shrink-0">
+                            {renderFlagBadge(draft.flags.description, `${draft.draftId}-description`)}
+                          </div>
+                        </div>
+                        <p className="text-xs text-gray-400 break-words">{draft.sourceText}</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => removeDraft(draft.draftId)}
+                        aria-label="Remove this expense"
+                        className="text-gray-400 hover:text-red-500 p-1 cursor-pointer"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    </div>
+
+                    <div className="flex gap-2 items-start">
+                      <div className="flex-1 min-w-0">
+                        <label className="text-xs text-gray-500">Amount</label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={draft.totalAmount || ""}
+                          onChange={(e) =>
+                            updateDraft(draft.draftId, {
+                              totalAmount: parseFloat(e.target.value) || 0,
+                            })
+                          }
+                          className="w-full p-2 text-sm border border-gray-200 rounded-lg bg-white"
+                        />
+                        <div className="mt-1">
+                          {renderFlagBadge(draft.flags.totalAmount, `${draft.draftId}-amount`)}
+                        </div>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <label className="text-xs text-gray-500">Currency</label>
+                        <select
+                          value={draft.currency}
+                          onChange={(e) =>
+                            updateDraft(draft.draftId, {
+                              currency: e.target.value,
+                            })
+                          }
+                          className="w-full p-2 text-sm border border-gray-200 rounded-lg bg-white"
+                        >
+                          {effectiveCurrencies.map((c) => (
+                            <option key={c.code} value={c.code}>
+                              {c.code}
+                            </option>
+                          ))}
+                        </select>
+                        <div className="mt-1">
+                          {renderFlagBadge(draft.flags.currency, `${draft.draftId}-currency`)}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="text-xs text-gray-500">Paid by</label>
+                      <div className="flex items-center gap-1">
+                        <select
+                          value={draft.payerId || ""}
+                          onChange={(e) =>
+                            updateDraft(draft.draftId, {
+                              payerId: e.target.value || null,
+                            })
+                          }
+                          className="w-full min-w-0 p-2 text-sm border border-gray-200 rounded-lg bg-white"
+                        >
+                          <option value="" disabled>
+                            Select payer
+                          </option>
+                          {uniqueMembers.map((m) => (
+                            <option key={m.id} value={m.id}>
+                              {m.name} {m.id === currentUser.id ? "(You)" : ""}
+                            </option>
+                          ))}
+                        </select>
+                        <div className="shrink-0">
+                          {renderFlagBadge(draft.flags.payer, `${draft.draftId}-payer`)}
+                        </div>
+                      </div>
+                      {draft.payerNameRaw && !payer && (
+                        <p className="text-xs text-orange-500 mt-1 break-words">
+                          Heard &quot;{draft.payerNameRaw}&quot; - please confirm who paid.
+                        </p>
+                      )}
+                    </div>
+
+                    <div>
+                      <div className="flex items-center gap-1">
+                        <label className="text-xs text-gray-500">
+                          Split{" "}
+                          {draft.splitType === "equal" ? "equally with" : "custom with"}
+                        </label>
+                        {renderFlagBadge(draft.flags.split, `${draft.draftId}-split`)}
+                      </div>
+                      <div className="flex flex-wrap gap-1.5 mt-1">
+                        {uniqueMembers.map((m) => {
+                          const included = participantIds.includes(m.id);
+                          return (
+                            <button
+                              key={m.id}
+                              type="button"
+                              onClick={() => {
+                                if (draft.splitType !== "equal") return;
+                                const current =
+                                  draft.splitMemberIds &&
+                                  draft.splitMemberIds.length > 0
+                                    ? draft.splitMemberIds
+                                    : uniqueMembers.map((mm) => mm.id);
+                                const next = current.includes(m.id)
+                                  ? current.filter((id) => id !== m.id)
+                                  : [...current, m.id];
+                                updateDraft(draft.draftId, {
+                                  splitMemberIds: next,
+                                });
+                              }}
+                              className={`text-xs px-2.5 py-1 rounded-full border transition-colors cursor-pointer ${
+                                included
+                                  ? "bg-black text-white border-black"
+                                  : "bg-white text-gray-600 border-gray-200"
+                              } ${draft.splitType !== "equal" ? "opacity-50 cursor-default" : ""}`}
+                              disabled={draft.splitType !== "equal"}
+                            >
+                              {m.name}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+
+              {draftExpenses.length === 0 && (
+                <p className="text-sm text-gray-500 text-center py-6">
+                  All expenses removed. Record again to add more.
+                </p>
+              )}
+            </div>
+          )}
+
+          {step === "submitting" && (
+            <div className="flex flex-col items-center text-center gap-3 py-10">
+              <div className="w-8 h-8 border-2 border-gray-300 border-t-black rounded-full animate-spin" />
+              <p className="text-sm text-gray-600">
+                Saving {submittedCount}/{draftExpenses.length} expenses...
+              </p>
+            </div>
+          )}
+
+          {step === "done" && (
+            <div className="flex flex-col items-center text-center gap-3 py-10">
+              <div className="w-14 h-14 rounded-full bg-green-50 flex items-center justify-center">
+                <svg className="w-7 h-7 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.5 12.75l6 6 9-13.5" />
+                </svg>
+              </div>
+              <p className="text-sm text-gray-600">All done!</p>
+            </div>
+          )}
+        </div>
+
+        <div className="p-6 pt-4 border-t border-gray-100 flex gap-3">
+          {step === "review" && (
+            <>
+              <button
+                type="button"
+                onClick={handleRecordAnother}
+                className="flex-1 border border-gray-200 text-gray-700 py-3 px-4 rounded-full font-medium hover:bg-gray-50 transition-colors cursor-pointer"
+              >
+                Record again
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmAll}
+                disabled={draftExpenses.length === 0}
+                className="flex-1 bg-black text-white py-3 px-4 rounded-full font-medium hover:opacity-80 disabled:opacity-50 transition-opacity cursor-pointer"
+              >
+                Confirm &amp; Save {draftExpenses.length > 0 ? `(${draftExpenses.length})` : ""}
+              </button>
+            </>
+          )}
+          {step === "done" && (
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 bg-black text-white py-3 px-4 rounded-full font-medium hover:opacity-80 transition-opacity cursor-pointer"
+            >
+              Close
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+          }
