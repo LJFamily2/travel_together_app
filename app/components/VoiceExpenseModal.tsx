@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { gql } from "@apollo/client";
 import { useMutation } from "@apollo/client/react";
 import toast from "react-hot-toast";
@@ -12,7 +12,10 @@ import type {
   ParseExpensesResponse,
   TranscribeResponse,
   VoiceApiError,
+  ClarificationRequest,
+  VoiceConversationTurn,
 } from "../../lib/voice/types";
+import { MAX_VOICE_CLARIFICATION_ROUNDS } from "../../lib/voice/types";
 
 const ADD_EXPENSE = gql`
   mutation AddExpenseFromVoice(
@@ -70,9 +73,22 @@ type FlowStep =
   | "record"
   | "transcribing"
   | "parsing"
+  | "clarifying"
+  | "clarify-transcribing"
   | "review"
   | "submitting"
   | "done";
+
+/** Guards against ever rendering a raw/unexpected error payload (e.g. a stray JSON blob) directly to the user. */
+function sanitizeUserMessage(raw: unknown, fallback: string): string {
+  if (typeof raw !== "string") return fallback;
+  const trimmed = raw.trim();
+  if (!trimmed) return fallback;
+  if (trimmed.startsWith("{") || trimmed.startsWith("[") || trimmed.length > 200) {
+    return fallback;
+  }
+  return trimmed;
+}
 
 /** Computes equal-split base-currency amounts for the given amount/members, matching AddExpenseForm's logic. */
 function computeEqualSplits(
@@ -104,8 +120,22 @@ export default function VoiceExpenseModal({
   const [draftExpenses, setDraftExpenses] = useState<ParsedExpense[]>([]);
   const [apiError, setApiError] = useState<string | null>(null);
   const [submittedCount, setSubmittedCount] = useState(0);
+  const [clarification, setClarification] = useState<ClarificationRequest | null>(null);
+  const [conversationHistory, setConversationHistory] = useState<VoiceConversationTurn[]>([]);
 
   const [addExpense] = useMutation(ADD_EXPENSE);
+
+  // Request mic permission as soon as the modal opens, rather than waiting
+  // for the user's first press-and-hold - that gesture would otherwise race
+  // the permission prompt and get swallowed while it's showing. Release the
+  // mic when the modal closes/unmounts.
+  useEffect(() => {
+    recorder.requestPermission();
+    return () => {
+      recorder.releaseStream();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const uniqueMembers = members.filter(
     (m, index, self) => index === self.findIndex((t) => t.name === m.name),
@@ -136,15 +166,86 @@ export default function VoiceExpenseModal({
     if (recorder.status !== "recording") return;
     const result = await recorder.stopRecording();
     if (!result) {
-      // Too short / empty - stay on the record screen silently.
+      // Too short / empty - stay on the current screen silently.
       return;
     }
-    await runTranscribeAndParse(result.audioBase64, result.format);
+    if (step === "clarifying") {
+      await runClarificationAnswer(result.audioBase64, result.format);
+    } else {
+      await runTranscribeAndParse(result.audioBase64, result.format);
+    }
+  };
+
+  /**
+   * Shared handling for a /api/voice/parse-expenses response, used by both
+   * the initial recording and every clarification-answer follow-up.
+   * `historySentThisCall` is the exact history array that was sent (not the
+   * possibly-stale `conversationHistory` state) so the round cap check is
+   * always accurate.
+   */
+  const handleParseResponse = (
+    parseRes: Response,
+    parseData: ParseExpensesResponse | VoiceApiError,
+    historySentThisCall: VoiceConversationTurn[],
+  ) => {
+    const fallbackStep: FlowStep = historySentThisCall.length > 0 ? "clarifying" : "record";
+
+    if (parseRes.status === 401) {
+      setApiError("Your session has expired. Please sign in again.");
+      setStep("record");
+      return;
+    }
+
+    if (parseRes.status === 429) {
+      setApiError("Too many requests. Please wait a moment and try again.");
+      setStep(fallbackStep);
+      return;
+    }
+
+    if (!parseRes.ok || !("expenses" in parseData)) {
+      setApiError(
+        sanitizeUserMessage(
+          "error" in parseData ? parseData.error : null,
+          "Couldn't understand that recording.",
+        ),
+      );
+      setStep(fallbackStep);
+      return;
+    }
+
+    // The model has everything it needs except one blocking piece of info
+    // (in practice, an amount) - ask the user instead of giving up, as long
+    // as we haven't already used up our clarification rounds.
+    if (
+      parseData.clarification &&
+      historySentThisCall.length < MAX_VOICE_CLARIFICATION_ROUNDS
+    ) {
+      setDraftExpenses(parseData.expenses);
+      setClarification(parseData.clarification);
+      setStep("clarifying");
+      return;
+    }
+
+    if (parseData.transcriptUnclear || parseData.expenses.length === 0) {
+      setApiError(
+        "Didn't catch a clear expense in that. Try again, e.g. \"Dinner, 200000 dong, Quang paid\".",
+      );
+      setClarification(null);
+      setConversationHistory([]);
+      setStep("record");
+      return;
+    }
+
+    setDraftExpenses(parseData.expenses);
+    setClarification(null);
+    setStep("review");
   };
 
   const runTranscribeAndParse = async (audioBase64: string, format: string) => {
     setStep("transcribing");
     setApiError(null);
+    setClarification(null);
+    setConversationHistory([]);
     try {
       const authToken = Cookies.get("guestToken");
       const authHeaders: HeadersInit = {
@@ -175,8 +276,10 @@ export default function VoiceExpenseModal({
 
       if (!transcribeRes.ok || !("transcript" in transcribeData)) {
         setApiError(
-          ("error" in transcribeData && transcribeData.error) ||
+          sanitizeUserMessage(
+            "error" in transcribeData ? transcribeData.error : null,
             "Couldn't transcribe that recording.",
+          ),
         );
         setStep("record");
         return;
@@ -194,47 +297,103 @@ export default function VoiceExpenseModal({
           currencies: effectiveCurrencies,
           baseCurrencyCode: effectiveBaseCode,
           currentUserId: currentUser.id,
+          history: [],
         }),
       });
-
-      if (parseRes.status === 401) {
-        setApiError("Your session has expired. Please sign in again.");
-        setStep("record");
-        return;
-      }
-
-      if (parseRes.status === 429) {
-        setApiError("Too many requests. Please wait a moment and try again.");
-        setStep("record");
-        return;
-      }
-
       const parseData = (await parseRes.json()) as
         | ParseExpensesResponse
         | VoiceApiError;
 
-      if (!parseRes.ok || !("expenses" in parseData)) {
-        setApiError(
-          ("error" in parseData && parseData.error) ||
-            "Couldn't understand that recording.",
-        );
-        setStep("record");
-        return;
-      }
-
-      if (parseData.transcriptUnclear || parseData.expenses.length === 0) {
-        setApiError(
-          "Didn't catch a clear expense in that. Try again, e.g. \"Dinner, 200000 dong, Quang paid\".",
-        );
-        setStep("record");
-        return;
-      }
-
-      setDraftExpenses(parseData.expenses);
-      setStep("review");
+      handleParseResponse(parseRes, parseData, []);
     } catch (err) {
       console.error("Voice flow error:", err);
       setApiError("Something went wrong. Please try again.");
+      setStep("record");
+    }
+  };
+
+  /** Handles a recorded answer to a clarification question - transcribes it, appends to history, and re-parses with the original transcript + full history. */
+  const runClarificationAnswer = async (audioBase64: string, format: string) => {
+    const question = clarification?.question || "";
+    setStep("clarify-transcribing");
+    setApiError(null);
+    try {
+      const authToken = Cookies.get("guestToken");
+      const authHeaders: HeadersInit = {
+        "Content-Type": "application/json",
+        ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+      };
+
+      const transcribeRes = await fetch("/api/voice/transcribe", {
+        method: "POST",
+        headers: authHeaders,
+        body: JSON.stringify({ audioBase64, format }),
+      });
+      const transcribeData = (await transcribeRes.json()) as
+        | TranscribeResponse
+        | VoiceApiError;
+
+      if (transcribeRes.status === 401) {
+        setApiError("Your session has expired. Please sign in again.");
+        setStep("clarifying");
+        return;
+      }
+
+      if (transcribeRes.status === 429) {
+        setApiError("Too many requests. Please wait a moment and try again.");
+        setStep("clarifying");
+        return;
+      }
+
+      if (!transcribeRes.ok || !("transcript" in transcribeData)) {
+        setApiError(
+          sanitizeUserMessage(
+            "error" in transcribeData ? transcribeData.error : null,
+            "Couldn't transcribe that answer.",
+          ),
+        );
+        setStep("clarifying");
+        return;
+      }
+
+      const newHistory: VoiceConversationTurn[] = [
+        ...conversationHistory,
+        { question, answerTranscript: transcribeData.transcript },
+      ];
+      setConversationHistory(newHistory);
+      setStep("parsing");
+
+      const parseRes = await fetch("/api/voice/parse-expenses", {
+        method: "POST",
+        headers: authHeaders,
+        body: JSON.stringify({
+          transcript,
+          members: uniqueMembers,
+          currencies: effectiveCurrencies,
+          baseCurrencyCode: effectiveBaseCode,
+          currentUserId: currentUser.id,
+          history: newHistory,
+        }),
+      });
+      const parseData = (await parseRes.json()) as
+        | ParseExpensesResponse
+        | VoiceApiError;
+
+      handleParseResponse(parseRes, parseData, newHistory);
+    } catch (err) {
+      console.error("Voice clarification flow error:", err);
+      setApiError("Something went wrong. Please try again.");
+      setStep("clarifying");
+    }
+  };
+
+  /** Lets the user bail out of the clarification loop and review whatever was captured so far, rather than being forced to keep answering. */
+  const handleSkipClarification = () => {
+    setClarification(null);
+    if (draftExpenses.length > 0) {
+      setStep("review");
+    } else {
+      setConversationHistory([]);
       setStep("record");
     }
   };
@@ -313,6 +472,8 @@ export default function VoiceExpenseModal({
     setTranscript("");
     setDraftExpenses([]);
     setApiError(null);
+    setClarification(null);
+    setConversationHistory([]);
     setStep("record");
   };
 
@@ -419,7 +580,7 @@ export default function VoiceExpenseModal({
                 {recorder.status === "recording"
                   ? `Recording... ${recorder.elapsedSeconds.toFixed(1)}s (release to send)`
                   : recorder.status === "requesting-permission"
-                  ? "Requesting microphone access..."
+                  ? "Setting up microphone..."
                   : "Hold to talk"}
               </p>
 
@@ -444,6 +605,82 @@ export default function VoiceExpenseModal({
                   &quot;{transcript}&quot;
                 </p>
               )}
+            </div>
+          )}
+
+          {step === "clarifying" && clarification && (
+            <div className="flex flex-col items-center text-center gap-4 py-6">
+              <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center">
+                <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.625 12a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H8.25m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H12m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0h-.375M21 12c0 4.556-4.03 8.25-9 8.25a9.764 9.764 0 01-2.555-.337A5.972 5.972 0 015.41 20.97a5.969 5.969 0 01-.474-.065 4.48 4.48 0 00.978-2.025c.09-.457-.133-.901-.467-1.226C3.93 16.178 3 14.189 3 12c0-4.556 4.03-8.25 9-8.25s9 3.694 9 8.25z" />
+                </svg>
+              </div>
+              <p className="text-sm font-semibold text-gray-800 max-w-sm">
+                {clarification.question}
+              </p>
+              <p className="text-xs text-gray-400">Hold the button and answer</p>
+
+              <button
+                type="button"
+                onMouseDown={handlePressStart}
+                onMouseUp={handlePressEnd}
+                onMouseLeave={() => {
+                  if (recorder.status === "recording") handlePressEnd();
+                }}
+                onTouchStart={(e) => {
+                  e.preventDefault();
+                  handlePressStart();
+                }}
+                onTouchEnd={(e) => {
+                  e.preventDefault();
+                  handlePressEnd();
+                }}
+                disabled={recorder.status === "requesting-permission"}
+                aria-pressed={recorder.status === "recording"}
+                className={`select-none cursor-pointer w-20 h-20 rounded-full flex items-center justify-center shadow-lg transition-all ${
+                  recorder.status === "recording"
+                    ? "bg-red-500 scale-110 animate-pulse"
+                    : "bg-black hover:opacity-90"
+                }`}
+              >
+                <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M12 18.75a6 6 0 006-6v-1.5m-6 7.5a6 6 0 01-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 01-3-3V4.5a3 3 0 116 0v8.25a3 3 0 01-3 3z"
+                  />
+                </svg>
+              </button>
+
+              <p className="text-sm font-medium text-gray-700 h-5">
+                {recorder.status === "recording"
+                  ? `Recording... ${recorder.elapsedSeconds.toFixed(1)}s (release to send)`
+                  : recorder.status === "requesting-permission"
+                  ? "Setting up microphone..."
+                  : "Hold to answer"}
+              </p>
+
+              {(recorder.errorMessage || apiError) && (
+                <p className="text-sm text-red-500 max-w-sm">
+                  {recorder.errorMessage || apiError}
+                </p>
+              )}
+
+              <button
+                type="button"
+                onClick={handleSkipClarification}
+                className="text-xs text-gray-400 hover:text-gray-600 underline cursor-pointer"
+              >
+                Skip - I&apos;ll fix it manually
+              </button>
+            </div>
+          )}
+
+          {step === "clarify-transcribing" && (
+            <div className="flex flex-col items-center text-center gap-3 py-10">
+              <div className="w-8 h-8 border-2 border-gray-300 border-t-black rounded-full animate-spin" />
+              <p className="text-sm text-gray-600">Got it, one moment...</p>
             </div>
           )}
 

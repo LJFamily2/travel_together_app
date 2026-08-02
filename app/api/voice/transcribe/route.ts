@@ -70,13 +70,21 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json<TranscribeResponse>({ transcript });
   } catch (err) {
+    if (err instanceof OpenRouterError) {
+      console.error(
+        "Voice transcribe error:",
+        err.status,
+        err.detail || err.message,
+      );
+      return NextResponse.json<VoiceApiError>(
+        { error: err.message },
+        { status: err.status >= 400 && err.status < 600 ? err.status : 500 },
+      );
+    }
     console.error("Voice transcribe error:", err);
-    const status = err instanceof OpenRouterError ? err.status : 500;
-    const message =
-      err instanceof Error ? err.message : "Transcription failed unexpectedly.";
     return NextResponse.json<VoiceApiError>(
-      { error: message },
-      { status: status >= 400 && status < 600 ? status : 500 },
+      { error: "Transcription failed unexpectedly. Please try again." },
+      { status: 500 },
     );
   }
 }
