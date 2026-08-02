@@ -1134,6 +1134,16 @@ export default function JourneyDashboard() {
                   </svg>
                   Add Expense
                 </button>
+                {!isInputLocked && (
+                 <VoiceExpenseButton
+                  journeyId={journey.id}
+                  currentUser={currentUser}
+                  members={journey.members}
+                  isLocked={isInputLocked}
+                  onExpensesAdded={() => refetch()}
+                  className="lg:hidden w-full mb-6 justify-center"
+                 />
+                )}
                 <ActivityFeed
                   journeyId={journeyId}
                   journeyName={journey.name}
