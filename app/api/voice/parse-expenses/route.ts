@@ -5,6 +5,7 @@ import {
   buildSystemPrompt,
   buildUserPrompt,
   normalizeParseResponse,
+  normalizeClarification,
   type RawParseResponse,
 } from "../../../../lib/voice/parsePrompt";
 import type {
@@ -13,7 +14,9 @@ import type {
   VoiceApiError,
   VoiceMemberContext,
   VoiceCurrencyContext,
+  VoiceConversationTurn,
 } from "../../../../lib/voice/types";
+import { MAX_VOICE_CLARIFICATION_ROUNDS } from "../../../../lib/voice/types";
 
 export const runtime = "nodejs";
 
@@ -24,6 +27,11 @@ const MAX_TRANSCRIPT_LENGTH = 4000;
 // A real journey has at most a handful of members/currencies in practice.
 const MAX_MEMBERS = 100;
 const MAX_CURRENCIES = 20;
+// Bounds the clarification conversation history the client can send back.
+// The frontend caps itself at MAX_VOICE_CLARIFICATION_ROUNDS turns, but we
+// re-validate server-side rather than trusting the client.
+const MAX_HISTORY_TURNS = MAX_VOICE_CLARIFICATION_ROUNDS + 1;
+const MAX_HISTORY_FIELD_LENGTH = 500;
 
 function isValidMember(m: unknown): m is VoiceMemberContext {
   return (
@@ -45,6 +53,15 @@ function isValidCurrency(c: unknown): c is VoiceCurrencyContext {
   );
 }
 
+function isValidHistoryTurn(t: unknown): t is VoiceConversationTurn {
+  return (
+    !!t &&
+    typeof t === "object" &&
+    typeof (t as VoiceConversationTurn).question === "string" &&
+    typeof (t as VoiceConversationTurn).answerTranscript === "string"
+  );
+}
+
 export async function POST(req: NextRequest) {
   const authResult = await requireAuthAndRateLimit(req);
   if (authResult instanceof NextResponse) return authResult;
@@ -59,7 +76,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const { transcript, members, currencies, baseCurrencyCode, currentUserId } =
+  const { transcript, members, currencies, baseCurrencyCode, currentUserId, history } =
     body;
 
   if (!transcript || typeof transcript !== "string" || !transcript.trim()) {
@@ -122,13 +139,44 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  let validatedHistory: VoiceConversationTurn[] = [];
+  if (history !== undefined) {
+    if (!Array.isArray(history) || !history.every(isValidHistoryTurn)) {
+      return NextResponse.json<VoiceApiError>(
+        { error: "Invalid conversation history" },
+        { status: 400 },
+      );
+    }
+    if (history.length > MAX_HISTORY_TURNS) {
+      return NextResponse.json<VoiceApiError>(
+        { error: "Conversation history too long" },
+        { status: 413 },
+      );
+    }
+    if (
+      history.some(
+        (h) =>
+          h.question.length > MAX_HISTORY_FIELD_LENGTH ||
+          h.answerTranscript.length > MAX_HISTORY_FIELD_LENGTH,
+      )
+    ) {
+      return NextResponse.json<VoiceApiError>(
+        { error: "Conversation history entry too long" },
+        { status: 413 },
+      );
+    }
+    validatedHistory = history;
+  }
+
   try {
+    const isFinalAttempt = validatedHistory.length >= MAX_VOICE_CLARIFICATION_ROUNDS;
     const systemPrompt = buildSystemPrompt({
       members,
       currencies,
       baseCurrencyCode,
+      isFinalAttempt,
     });
-    const userPrompt = buildUserPrompt(transcript);
+    const userPrompt = buildUserPrompt(transcript, validatedHistory);
 
     const raw = await chatJSON<RawParseResponse>({
       systemPrompt,
@@ -151,18 +199,35 @@ export async function POST(req: NextRequest) {
         : exp,
     );
 
+    // Never honor a clarification question once we're at the round cap,
+    // even if the model asks anyway - guarantees the conversation loop
+    // terminates instead of relying solely on prompt compliance.
+    const clarification = isFinalAttempt
+      ? undefined
+      : normalizeClarification(raw);
+
     return NextResponse.json<ParseExpensesResponse>({
       expenses: withDefaultPayer,
-      transcriptUnclear: !!raw.transcriptUnclear && withDefaultPayer.length === 0,
+      transcriptUnclear:
+        !!raw.transcriptUnclear && withDefaultPayer.length === 0 && !clarification,
+      ...(clarification ? { clarification } : {}),
     });
   } catch (err) {
+    if (err instanceof OpenRouterError) {
+      console.error(
+        "Voice parse-expenses error:",
+        err.status,
+        err.detail || err.message,
+      );
+      return NextResponse.json<VoiceApiError>(
+        { error: err.message },
+        { status: err.status >= 400 && err.status < 600 ? err.status : 500 },
+      );
+    }
     console.error("Voice parse-expenses error:", err);
-    const status = err instanceof OpenRouterError ? err.status : 500;
-    const message =
-      err instanceof Error ? err.message : "Parsing failed unexpectedly.";
     return NextResponse.json<VoiceApiError>(
-      { error: message },
-      { status: status >= 400 && status < 600 ? status : 500 },
+      { error: "Parsing failed unexpectedly. Please try again." },
+      { status: 500 },
     );
   }
 }

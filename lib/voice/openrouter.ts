@@ -31,11 +31,45 @@ function getApiKey(): string {
 
 export class OpenRouterError extends Error {
   status: number;
-  constructor(message: string, status: number) {
+  /**
+   * Raw upstream error detail (response body, network error message, etc.),
+   * kept for server-side console.error logging only. `message` itself is
+   * always a curated, user-safe string - see mapUpstreamStatusToMessage.
+   * Never send `detail` to the client.
+   */
+  detail?: string;
+  constructor(message: string, status: number, detail?: string) {
     super(message);
     this.name = "OpenRouterError";
     this.status = status;
+    this.detail = detail;
   }
+}
+
+/**
+ * Maps an upstream HTTP status to a short, human-friendly message safe to
+ * show directly in the UI. We deliberately never forward the raw response
+ * body from OpenRouter/the STT or LLM provider to the client - it can be a
+ * JSON blob, a stack trace fragment, or otherwise confusing/leaky text.
+ */
+function mapUpstreamStatusToMessage(
+  status: number,
+  context: "transcribe" | "parse",
+): string {
+  if (status === 401 || status === 403) {
+    return "Voice service isn't configured correctly. Please contact support.";
+  }
+  if (status === 429) {
+    return "The voice service is busy right now. Please wait a moment and try again.";
+  }
+  if (status >= 500 || status === 0) {
+    return context === "transcribe"
+      ? "Couldn't reach the transcription service. Please try again."
+      : "Couldn't reach the parsing service. Please try again.";
+  }
+  return context === "transcribe"
+    ? "Couldn't transcribe that recording. Please try again."
+    : "Couldn't understand that recording. Please try again.";
 }
 
 /**
@@ -48,37 +82,54 @@ export async function transcribeAudio(
   audioBase64: string,
   format: string,
 ): Promise<string> {
-  const res = await fetch(`${OPENROUTER_BASE_URL}/audio/transcriptions`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${getApiKey()}`,
-      "Content-Type": "application/json",
-      "HTTP-Referer": process.env.NEXTAUTH_URL || "https://localhost:3000",
-      "X-Title": "Travel Together - Voice Expense",
-    },
-    body: JSON.stringify({
-      model: VOICE_STT_MODEL,
-      input_audio: {
-        data: audioBase64,
-        format,
+  let res: Response;
+  try {
+    res = await fetch(`${OPENROUTER_BASE_URL}/audio/transcriptions`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${getApiKey()}`,
+        "Content-Type": "application/json",
+        "HTTP-Referer": process.env.NEXTAUTH_URL || "https://localhost:3000",
+        "X-Title": "Travel Together - Voice Expense",
       },
-      // Do not set `language` - let the model auto-detect / code-switch.
-    }),
-  });
+      body: JSON.stringify({
+        model: VOICE_STT_MODEL,
+        input_audio: {
+          data: audioBase64,
+          format,
+        },
+        // Do not set `language` - let the model auto-detect / code-switch.
+      }),
+    });
+  } catch (err) {
+    // Network-level failure (DNS, timeout, connection refused, ...) - never
+    // reached OpenRouter at all, so there's no response body to log.
+    throw new OpenRouterError(
+      mapUpstreamStatusToMessage(0, "transcribe"),
+      503,
+      err instanceof Error ? err.message : String(err),
+    );
+  }
 
   if (!res.ok) {
     const text = await res.text().catch(() => "");
+    console.error(
+      `[voice] OpenRouter transcription error (${res.status}):`,
+      text || res.statusText,
+    );
     throw new OpenRouterError(
-      `Transcription failed (${res.status}): ${text || res.statusText}`,
+      mapUpstreamStatusToMessage(res.status, "transcribe"),
       res.status,
+      text || res.statusText,
     );
   }
 
   const data = await res.json();
   const transcript = data?.text;
   if (typeof transcript !== "string") {
+    console.error("[voice] OpenRouter transcription response missing text:", data);
     throw new OpenRouterError(
-      "Transcription response did not include text.",
+      mapUpstreamStatusToMessage(502, "transcribe"),
       502,
     );
   }
@@ -97,48 +148,58 @@ export async function chatJSON<T>(params: {
 }): Promise<T> {
   const { systemPrompt, userPrompt, model, temperature = 0.1 } = params;
 
-  const res = await fetch(`${OPENROUTER_BASE_URL}/chat/completions`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${getApiKey()}`,
-      "Content-Type": "application/json",
-      "HTTP-Referer": process.env.NEXTAUTH_URL || "https://localhost:3000",
-      "X-Title": "Travel Together - Voice Expense",
-    },
-    body: JSON.stringify({
-      model: model || VOICE_PARSE_MODEL,
-      temperature,
-      response_format: { type: "json_object" },
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt },
-      ],
-    }),
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${OPENROUTER_BASE_URL}/chat/completions`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${getApiKey()}`,
+        "Content-Type": "application/json",
+        "HTTP-Referer": process.env.NEXTAUTH_URL || "https://localhost:3000",
+        "X-Title": "Travel Together - Voice Expense",
+      },
+      body: JSON.stringify({
+        model: model || VOICE_PARSE_MODEL,
+        temperature,
+        response_format: { type: "json_object" },
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt },
+        ],
+      }),
+    });
+  } catch (err) {
+    throw new OpenRouterError(
+      mapUpstreamStatusToMessage(0, "parse"),
+      503,
+      err instanceof Error ? err.message : String(err),
+    );
+  }
 
   if (!res.ok) {
     const text = await res.text().catch(() => "");
+    console.error(
+      `[voice] OpenRouter chat-completion error (${res.status}):`,
+      text || res.statusText,
+    );
     throw new OpenRouterError(
-      `LLM parse call failed (${res.status}): ${text || res.statusText}`,
+      mapUpstreamStatusToMessage(res.status, "parse"),
       res.status,
+      text || res.statusText,
     );
   }
 
   const data = await res.json();
   const raw = data?.choices?.[0]?.message?.content;
   if (typeof raw !== "string") {
-    throw new OpenRouterError(
-      "LLM response did not include message content.",
-      502,
-    );
+    console.error("[voice] OpenRouter chat-completion response missing content:", data);
+    throw new OpenRouterError(mapUpstreamStatusToMessage(502, "parse"), 502);
   }
 
   try {
     return JSON.parse(raw) as T;
   } catch {
-    throw new OpenRouterError(
-      "LLM response was not valid JSON.",
-      502,
-    );
+    console.error("[voice] OpenRouter chat-completion returned non-JSON content:", raw);
+    throw new OpenRouterError(mapUpstreamStatusToMessage(502, "parse"), 502);
   }
 }

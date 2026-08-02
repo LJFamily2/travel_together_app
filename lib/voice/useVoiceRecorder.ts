@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 export type VoiceRecorderStatus =
   | "idle"
@@ -14,6 +14,14 @@ interface UseVoiceRecorderResult {
   /** Seconds elapsed in the current recording (updates ~every 200ms). */
   elapsedSeconds: number;
   errorMessage: string | null;
+  /**
+   * Proactively requests mic permission and keeps the stream open for
+   * reuse, without starting a recording. Call this as soon as the voice UI
+   * opens (e.g. on mount) so the permission prompt - and any user
+   * interaction it requires - happens before the user's first
+   * press-and-hold gesture, instead of racing with it.
+   */
+  requestPermission: () => Promise<void>;
   /** Call on press/touchstart of the mic button. */
   startRecording: () => Promise<void>;
   /**
@@ -24,6 +32,13 @@ interface UseVoiceRecorderResult {
   stopRecording: () => Promise<{ audioBase64: string; format: string } | null>;
   /** Call to abandon a recording without processing it (e.g. cancel button). */
   cancelRecording: () => void;
+  /**
+   * Fully releases the microphone (stops hardware tracks). Call when the
+   * voice UI closes/unmounts for good - not between individual takes, since
+   * the stream is intentionally kept alive across multiple recordings once
+   * granted (avoids re-prompting / re-acquiring the device each time).
+   */
+  releaseStream: () => void;
 }
 
 const MIN_RECORDING_MS = 400;
@@ -69,6 +84,32 @@ function blobToBase64(blob: Blob): Promise<string> {
   });
 }
 
+function isMicNotSupportedError(): boolean {
+  return (
+    typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia
+  );
+}
+
+function permissionDeniedMessage(err: unknown): string {
+  return err instanceof Error && err.name === "NotAllowedError"
+    ? "Microphone permission was denied. Please allow mic access to use voice entry."
+    : "Couldn't access the microphone. Please check your device settings.";
+}
+
+async function acquireStream(): Promise<MediaStream> {
+  return navigator.mediaDevices.getUserMedia({
+    audio: {
+      echoCancellation: true,
+      noiseSuppression: true,
+      channelCount: 1,
+    },
+  });
+}
+
+function streamIsLive(stream: MediaStream | null): boolean {
+  return !!stream && stream.getTracks().some((t) => t.readyState === "live");
+}
+
 export function useVoiceRecorder(): UseVoiceRecorderResult {
   const [status, setStatus] = useState<VoiceRecorderStatus>("idle");
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
@@ -80,41 +121,92 @@ export function useVoiceRecorder(): UseVoiceRecorderResult {
   const mimeTypeRef = useRef<string>("");
   const startTimeRef = useRef<number>(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Guards against overlapping requestPermission() calls (e.g. StrictMode
+  // double-invoking effects, or the consumer calling it more than once).
+  const permissionRequestRef = useRef<Promise<void> | null>(null);
 
-  const cleanupStream = useCallback(() => {
+  const stopTimer = useCallback(() => {
     if (timerRef.current) {
       clearInterval(timerRef.current);
       timerRef.current = null;
     }
+  }, []);
+
+  /** Releases the mic hardware entirely. Safe to call multiple times. */
+  const releaseStream = useCallback(() => {
+    stopTimer();
     streamRef.current?.getTracks().forEach((t) => t.stop());
     streamRef.current = null;
     mediaRecorderRef.current = null;
-  }, []);
+  }, [stopTimer]);
 
-  const startRecording = useCallback(async () => {
-    setErrorMessage(null);
-    setStatus("requesting-permission");
-    chunksRef.current = [];
+  const requestPermission = useCallback(async () => {
+    if (streamIsLive(streamRef.current)) return; // already have a live stream
+    if (permissionRequestRef.current) return permissionRequestRef.current; // already in flight
 
-    if (
-      typeof navigator === "undefined" ||
-      !navigator.mediaDevices?.getUserMedia
-    ) {
+    if (isMicNotSupportedError()) {
       setStatus("error");
       setErrorMessage("Voice recording isn't supported on this browser.");
       return;
     }
 
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          channelCount: 1,
-        },
-      });
-      streamRef.current = stream;
+    setErrorMessage(null);
+    setStatus("requesting-permission");
 
+    const promise = (async () => {
+      try {
+        const stream = await acquireStream();
+        streamRef.current = stream;
+        setStatus("idle");
+      } catch (err) {
+        setStatus("error");
+        setErrorMessage(permissionDeniedMessage(err));
+      } finally {
+        permissionRequestRef.current = null;
+      }
+    })();
+
+    permissionRequestRef.current = promise;
+    return promise;
+  }, []);
+
+  const startRecording = useCallback(async () => {
+    setErrorMessage(null);
+    chunksRef.current = [];
+
+    // Reuse the stream from an earlier requestPermission()/recording if
+    // it's still live - this is what lets the very first press-and-hold
+    // start recording instantly instead of racing the permission prompt,
+    // and avoids re-acquiring the mic between multiple takes in one session.
+    let stream = streamRef.current;
+    if (!streamIsLive(stream)) {
+      if (isMicNotSupportedError()) {
+        setStatus("error");
+        setErrorMessage("Voice recording isn't supported on this browser.");
+        return;
+      }
+      setStatus("requesting-permission");
+      try {
+        stream = await acquireStream();
+        streamRef.current = stream;
+      } catch (err) {
+        releaseStream();
+        setStatus("error");
+        setErrorMessage(permissionDeniedMessage(err));
+        return;
+      }
+    }
+
+    if (!stream) {
+      // Shouldn't happen (the block above either has a live stream or
+      // returns early), but keeps TypeScript's narrowing honest and gives
+      // a safe fallback instead of ever calling `new MediaRecorder(null)`.
+      setStatus("error");
+      setErrorMessage("Couldn't access the microphone. Please try again.");
+      return;
+    }
+
+    try {
       const mime = pickMimeType();
       mimeTypeRef.current = mime;
 
@@ -135,16 +227,12 @@ export function useVoiceRecorder(): UseVoiceRecorderResult {
       timerRef.current = setInterval(() => {
         setElapsedSeconds((Date.now() - startTimeRef.current) / 1000);
       }, 200);
-    } catch (err) {
-      cleanupStream();
+    } catch {
+      releaseStream();
       setStatus("error");
-      setErrorMessage(
-        err instanceof Error && err.name === "NotAllowedError"
-          ? "Microphone permission was denied. Please allow mic access to use voice entry."
-          : "Couldn't access the microphone. Please check your device settings.",
-      );
+      setErrorMessage("Couldn't start recording. Please try again.");
     }
-  }, [cleanupStream]);
+  }, [releaseStream]);
 
   const stopRecording = useCallback((): Promise<{
     audioBase64: string;
@@ -155,14 +243,20 @@ export function useVoiceRecorder(): UseVoiceRecorderResult {
       const durationMs = Date.now() - startTimeRef.current;
 
       if (!recorder || recorder.state === "inactive") {
-        cleanupStream();
+        stopTimer();
         setStatus("idle");
         resolve(null);
         return;
       }
 
       recorder.onstop = async () => {
-        cleanupStream();
+        // Only stop the timer/recorder handle here - deliberately do NOT
+        // release the underlying MediaStream, so the mic stays "warm" for
+        // the next take (e.g. another expense, or a clarification answer)
+        // without prompting/re-acquiring again. releaseStream() is called
+        // separately when the voice UI actually closes.
+        stopTimer();
+        mediaRecorderRef.current = null;
 
         if (durationMs < MIN_RECORDING_MS || chunksRef.current.length === 0) {
           setStatus("idle");
@@ -189,7 +283,7 @@ export function useVoiceRecorder(): UseVoiceRecorderResult {
 
       recorder.stop();
     });
-  }, [cleanupStream]);
+  }, [stopTimer]);
 
   const cancelRecording = useCallback(() => {
     const recorder = mediaRecorderRef.current;
@@ -197,17 +291,30 @@ export function useVoiceRecorder(): UseVoiceRecorderResult {
       recorder.onstop = null;
       recorder.stop();
     }
-    cleanupStream();
+    stopTimer();
+    mediaRecorderRef.current = null;
     setStatus("idle");
     setElapsedSeconds(0);
-  }, [cleanupStream]);
+  }, [stopTimer]);
+
+  // Safety net: release the mic if the component unmounts while a stream is
+  // still open (e.g. user closes the modal without an explicit releaseStream
+  // call somewhere).
+  useEffect(() => {
+    return () => {
+      releaseStream();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return {
     status,
     elapsedSeconds,
     errorMessage,
+    requestPermission,
     startRecording,
     stopRecording,
     cancelRecording,
+    releaseStream,
   };
-  }
+}
