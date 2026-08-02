@@ -1090,7 +1090,15 @@ export default function JourneyDashboard() {
                   currentUserId={currentUser.id}
                 />
 
-                <div className="hidden lg:block">
+                <div className="hidden lg:block space-y-3">
+                  <VoiceExpenseButton
+                    journeyId={journey.id}
+                    currentUser={currentUser}
+                    members={journey.members}
+                    isLocked={isInputLocked}
+                    onExpensesAdded={() => refetch()}
+                    className="w-full justify-center"
+                  />
                   <AddExpenseForm
                     journeyId={journey.id}
                     currentUser={currentUser}
