@@ -12,6 +12,7 @@ import toast from "react-hot-toast";
 import Image from "next/image";
 import StyledQRCode from "../../components/StyledQRCode";
 import AddExpenseForm from "../../components/AddExpenseForm";
+import VoiceExpenseButton from "../../components/VoiceExpenseButton";
 import ActivityFeed from "../../components/ActivityFeed";
 import MyTotalSpend from "../../components/MyTotalSpend";
 import SettleUpModal from "../../components/SettleUpModal";
